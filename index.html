@@ -1,1 +1,426 @@
-.
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moto Pixel Runner</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #111;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+}
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 4px solid #333;
+  background: #1a1a2e;
+  max-width: 100%;
+  height: auto;
+}
+#ui {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 2px 2px 0 #000;
+}
+#score { font-size: 24px; }
+#gameOver {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #ff4444;
+  font-size: 32px;
+  text-align: center;
+  text-shadow: 3px 3px 0 #000;
+  pointer-events: none;
+}
+#startMsg {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #aaa;
+  font-size: 16px;
+  text-shadow: 1px 1px 0 #000;
+}
+</style>
+</head>
+<body>
+<canvas id="game" width="800" height="400"></canvas>
+<div id="ui">
+  <div id="score">SCORE: 0</div>
+</div>
+<div id="gameOver">GAME OVER<br><span style="font-size:18px;color:#fff">Pressione ESPAÇO para reiniciar</span></div>
+<div id="startMsg">ESPAÇO = PULAR | Acelere e desvie dos obstáculos!</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const W = canvas.width;
+const H = canvas.height;
+const GROUND_Y = H - 60;
+
+// ====== IMAGENS (coloque na pasta img/) ======
+// player.png  → personagem em cima da moto (recomendado ~80x60 px)
+// obstacle.png → obstáculo (recomendado ~40x40 px)
+// bg.png       → fundo opcional (tile horizontal)
+
+const imgPlayer = new Image();
+const imgObstacle = new Image();
+const imgBg = new Image();
+
+imgPlayer.src = 'img/player.png';
+imgObstacle.src = 'img/obstacle.png';
+imgBg.src = 'img/bg.png';
+
+let imagesLoaded = 0;
+const totalImages = 3;
+function onImgLoad() {
+  imagesLoaded++;
+  if (imagesLoaded >= totalImages) {
+    // imagens prontas (ou falharam – fallback desenhado)
+  }
+}
+imgPlayer.onload = onImgLoad;
+imgObstacle.onload = onImgLoad;
+imgBg.onload = onImgLoad;
+imgPlayer.onerror = onImgLoad;
+imgObstacle.onerror = onImgLoad;
+imgBg.onerror = onImgLoad;
+
+// ====== ESTADO DO JOGO ======
+let score = 0;
+let highScore = 0;
+let gameSpeed = 4;
+let isGameOver = false;
+let isStarted = false;
+let frame = 0;
+
+// Player (moto)
+const player = {
+  x: 100,
+  y: GROUND_Y,
+  w: 80,
+  h: 60,
+  vy: 0,
+  jumpPower: -14,
+  gravity: 0.6,
+  grounded: true,
+  rotation: 0
+};
+
+// Obstáculos
+let obstacles = [];
+const obstacleTypes = [
+  { w: 36, h: 36 },
+  { w: 48, h: 28 },
+  { w: 30, h: 50 }
+];
+
+// Partículas de aceleração / poeira
+let particles = [];
+
+// Background scroll
+let bgOffset = 0;
+
+// ====== CONTROLES ======
+let keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (isGameOver) {
+      resetGame();
+    } else if (!isStarted) {
+      isStarted = true;
+      document.getElementById('startMsg').style.display = 'none';
+    } else {
+      jump();
+    }
+  }
+});
+window.addEventListener('keyup', e => {
+  keys[e.code] = false;
+});
+
+// Toque / clique
+canvas.addEventListener('pointerdown', () => {
+  if (isGameOver) {
+    resetGame();
+  } else if (!isStarted) {
+    isStarted = true;
+    document.getElementById('startMsg').style.display = 'none';
+  } else {
+    jump();
+  }
+});
+
+function jump() {
+  if (player.grounded && !isGameOver) {
+    player.vy = player.jumpPower;
+    player.grounded = false;
+    // partículas de salto
+    for (let i = 0; i < 6; i++) {
+      particles.push({
+        x: player.x + 20,
+        y: player.y + player.h,
+        vx: Math.random() * 2 - 1,
+        vy: Math.random() * -2,
+        life: 20,
+        color: '#888'
+      });
+    }
+  }
+}
+
+function resetGame() {
+  score = 0;
+  gameSpeed = 4;
+  isGameOver = false;
+  isStarted = true;
+  obstacles = [];
+  particles = [];
+  player.y = GROUND_Y;
+  player.vy = 0;
+  player.grounded = true;
+  player.rotation = 0;
+  document.getElementById('gameOver').style.display = 'none';
+  document.getElementById('score').textContent = 'SCORE: 0';
+}
+
+// ====== SPAWN DE OBSTÁCULOS ======
+function spawnObstacle() {
+  const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+  obstacles.push({
+    x: W + 20,
+    y: GROUND_Y + 10 - type.h,
+    w: type.w,
+    h: type.h,
+    passed: false
+  });
+}
+
+// ====== UPDATE ======
+function update() {
+  if (!isStarted || isGameOver) return;
+
+  frame++;
+  score += 0.1 * (gameSpeed / 4);
+  document.getElementById('score').textContent = 'SCORE: ' + Math.floor(score);
+
+  // Aceleração gradual
+  if (frame % 120 === 0) {
+    gameSpeed = Math.min(gameSpeed + 0.3, 14);
+  }
+
+  // Física do player
+  player.vy += player.gravity;
+  player.y += player.vy;
+
+  if (player.y >= GROUND_Y) {
+    player.y = GROUND_Y;
+    player.vy = 0;
+    player.grounded = true;
+    player.rotation = 0;
+  } else {
+    player.grounded = false;
+    player.rotation = Math.min(player.vy * 2, 25);
+  }
+
+  // Scroll do fundo
+  bgOffset = (bgOffset + gameSpeed * 0.5) % W;
+
+  // Partículas de motor / poeira no chão
+  if (player.grounded && frame % 3 === 0) {
+    particles.push({
+      x: player.x + 10,
+      y: player.y + player.h - 5,
+      vx: -gameSpeed * 0.5 - Math.random() * 2,
+      vy: -Math.random() * 1.5,
+      life: 15 + Math.random() * 10,
+      color: Math.random() > 0.5 ? '#555' : '#777'
+    });
+  }
+
+  // Atualiza partículas
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Spawn obstáculos
+  if (frame % Math.max(40, 90 - Math.floor(gameSpeed * 4)) === 0) {
+    spawnObstacle();
+  }
+
+  // Move e verifica obstáculos
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const o = obstacles[i];
+    o.x -= gameSpeed;
+
+    // Colisão (hitbox reduzida um pouco para pixel art)
+    const px = player.x + 15;
+    const py = player.y + 10;
+    const pw = player.w - 30;
+    const ph = player.h - 15;
+
+    if (px < o.x + o.w &&
+        px + pw > o.x &&
+        py < o.y + o.h &&
+        py + ph > o.y) {
+      isGameOver = true;
+      highScore = Math.max(highScore, Math.floor(score));
+      document.getElementById('gameOver').style.display = 'block';
+      document.getElementById('gameOver').innerHTML =
+        'GAME OVER<br><span style="font-size:18px;color:#fff">Score: ' + Math.floor(score) +
+        ' | Recorde: ' + highScore + '<br>Pressione ESPAÇO para reiniciar</span>';
+    }
+
+    // Remove fora da tela
+    if (o.x + o.w < 0) {
+      obstacles.splice(i, 1);
+    }
+  }
+}
+
+// ====== DRAW ======
+function drawPixelRect(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
+}
+
+function drawFallbackPlayer(x, y) {
+  // Moto + personagem pixel art simples
+  // Corpo da moto
+  drawPixelRect(x + 10, y + 35, 55, 12, '#222');
+  drawPixelRect(x + 5, y + 40, 20, 8, '#111');   // roda traseira
+  drawPixelRect(x + 55, y + 40, 18, 8, '#111');  // roda dianteira
+  // Detalhes da moto
+  drawPixelRect(x + 25, y + 28, 30, 10, '#c41e3a'); // tanque vermelho
+  drawPixelRect(x + 50, y + 20, 8, 18, '#333');     // guidão
+  // Personagem
+  drawPixelRect(x + 30, y + 10, 18, 20, '#4a90d9'); // corpo
+  drawPixelRect(x + 32, y + 2, 14, 12, '#f5c542');  // capacete
+  drawPixelRect(x + 34, y + 6, 10, 4, '#222');      // viseira
+  // Braço
+  drawPixelRect(x + 45, y + 15, 12, 6, '#4a90d9');
+}
+
+function drawFallbackObstacle(x, y, w, h) {
+  // Caixa de obstáculo pixel
+  drawPixelRect(x, y, w, h, '#8b4513');
+  drawPixelRect(x + 4, y + 4, w - 8, h - 8, '#a0522d');
+  // X de perigo
+  ctx.strokeStyle = '#ff0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + 6, y + 6);
+  ctx.lineTo(x + w - 6, y + h - 6);
+  ctx.moveTo(x + w - 6, y + 6);
+  ctx.lineTo(x + 6, y + h - 6);
+  ctx.stroke();
+}
+
+function draw() {
+  // Fundo
+  if (imgBg.complete && imgBg.naturalWidth > 0) {
+    // Tile do fundo
+    const bgW = imgBg.width;
+    const scale = H / imgBg.height;
+    const scaledW = bgW * scale;
+    let ox = - (bgOffset % scaledW);
+    while (ox < W) {
+      ctx.drawImage(imgBg, ox, 0, scaledW, H);
+      ox += scaledW;
+    }
+  } else {
+    // Fallback céu + chão
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, W, H);
+    // Estrelas
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 30; i++) {
+      const sx = (i * 73 + bgOffset * 0.2) % W;
+      const sy = (i * 37) % (H - 80);
+      ctx.fillRect(sx, sy, 2, 2);
+    }
+  }
+
+  // Chão
+  ctx.fillStyle = '#2d3436';
+  ctx.fillRect(0, GROUND_Y + 50, W, H - GROUND_Y);
+  // Linha da pista
+  ctx.fillStyle = '#636e72';
+  ctx.fillRect(0, GROUND_Y + 48, W, 4);
+  // Marcas da pista
+  ctx.fillStyle = '#dfe6e9';
+  for (let i = 0; i < 12; i++) {
+    const mx = ((i * 80) - (bgOffset * 2) % 80);
+    ctx.fillRect(mx, GROUND_Y + 55, 40, 4);
+  }
+
+  // Partículas
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life / 25;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 3, 3);
+  });
+  ctx.globalAlpha = 1;
+
+  // Obstáculos
+  obstacles.forEach(o => {
+    if (imgObstacle.complete && imgObstacle.naturalWidth > 0) {
+      ctx.drawImage(imgObstacle, Math.floor(o.x), Math.floor(o.y), o.w, o.h);
+    } else {
+      drawFallbackObstacle(o.x, o.y, o.w, o.h);
+    }
+  });
+
+  // Player
+  ctx.save();
+  ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
+  ctx.rotate(player.rotation * Math.PI / 180);
+  if (imgPlayer.complete && imgPlayer.naturalWidth > 0) {
+    ctx.drawImage(imgPlayer, -player.w / 2, -player.h / 2, player.w, player.h);
+  } else {
+    drawFallbackPlayer(-player.w / 2, -player.h / 2);
+  }
+  ctx.restore();
+
+  // Velocímetro visual
+  if (isStarted && !isGameOver) {
+    ctx.fillStyle = '#00ff88';
+    ctx.font = '12px Courier New';
+    ctx.fillText('SPD ' + Math.floor(gameSpeed * 10), 10, 20);
+  }
+}
+
+// ====== LOOP ======
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Inicia
+loop();
+</script>
+</body>
+</html>
