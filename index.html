@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Moto Pixel - Gatinhos</title>
+<title>Moto Pixel - Gatinhos Infinitos</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -24,7 +24,8 @@ canvas {
   max-width: 100%;
   height: auto;
 }
-#ui {
+#hud {
+  display: none;
   position: absolute;
   top: 10px;
   left: 50%;
@@ -33,91 +34,155 @@ canvas {
   text-align: center;
   pointer-events: none;
   text-shadow: 2px 2px 0 #000;
-  font-size: 16px;
-  line-height: 1.4;
+  font-size: 15px;
+  line-height: 1.45;
 }
 #hint {
+  display: none;
   position: absolute;
-  bottom: 12px;
+  bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
-  color: #888;
+  color: #777;
   font-size: 12px;
   text-shadow: 1px 1px 0 #000;
   pointer-events: none;
 }
-#menu {
+/* ===== MENUS ===== */
+.panel {
   display: none;
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.85);
+  background: rgba(8,8,16,0.92);
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  flex-direction: column;
-  z-index: 10;
+  z-index: 20;
 }
-#menu.open { display: flex; }
-#menu h2 {
+.panel.open { display: flex; }
+.panel h1 {
   color: #ff9ff3;
-  font-size: 28px;
-  margin-bottom: 16px;
+  font-size: 36px;
+  margin-bottom: 8px;
+  text-shadow: 3px 3px 0 #000;
+}
+.panel h2 {
+  color: #ff9ff3;
+  font-size: 26px;
+  margin-bottom: 14px;
   text-shadow: 2px 2px 0 #000;
 }
-#collection {
-  display: grid;
-  grid-template-columns: repeat(5, 72px);
-  gap: 12px;
-  max-width: 420px;
-  margin-bottom: 20px;
-}
-.cat-slot {
-  width: 72px;
-  height: 72px;
-  background: #2d3436;
-  border: 3px solid #636e72;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  image-rendering: pixelated;
-}
-.cat-slot.got {
-  border-color: #ff9ff3;
-  background: #3d2a3d;
-}
-#menu p {
-  color: #ccc;
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-#closeBtn {
-  margin-top: 12px;
-  padding: 8px 24px;
+.panel p { color: #aaa; font-size: 14px; margin-bottom: 18px; }
+.btn {
+  padding: 12px 36px;
+  margin: 8px;
   background: #6c5ce7;
   color: #fff;
-  border: none;
+  border: 3px solid #a29bfe;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
-  border: 2px solid #a29bfe;
+  min-width: 200px;
 }
-#closeBtn:hover { background: #a29bfe; color: #000; }
+.btn:hover { background: #a29bfe; color: #111; }
+.btn.secondary { background: #2d3436; border-color: #636e72; }
+.btn.secondary:hover { background: #636e72; color: #fff; }
+
+#collectionGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 90px);
+  gap: 14px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  padding: 8px;
+}
+.cat-card {
+  width: 90px;
+  background: #1e1e2e;
+  border: 3px solid #444;
+  padding: 6px;
+  text-align: center;
+  cursor: pointer;
+}
+.cat-card.got { border-color: #ff9ff3; }
+.cat-card .swatch {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 4px;
+  image-rendering: pixelated;
+}
+.cat-card .name {
+  color: #ddd;
+  font-size: 10px;
+  line-height: 1.2;
+}
+.cat-card.locked .name { color: #555; }
+
+#detail {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+  background: #1a1a2e;
+  border: 4px solid #ff9ff3;
+  padding: 20px 28px;
+  max-width: 340px;
+  z-index: 30;
+  text-align: center;
+}
+#detail.open { display: block; }
+#detail h3 { color: #ff9ff3; margin-bottom: 8px; font-size: 18px; }
+#detail .big-swatch {
+  width: 80px;
+  height: 80px;
+  margin: 10px auto;
+  image-rendering: pixelated;
+}
+#detail p { color: #ccc; font-size: 13px; line-height: 1.4; margin-bottom: 12px; }
+#detail .close-detail {
+  padding: 6px 18px;
+  background: #6c5ce7;
+  border: 2px solid #a29bfe;
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
 <canvas id="c" width="960" height="540"></canvas>
-<div id="ui">
-  DISTÂNCIA: <span id="dist">0</span>m<br>
-  GATINHOS: <span id="cats">0</span> / <span id="totalCats">0</span>
-  &nbsp;|&nbsp; [M] Coleção
-</div>
-<div id="hint">A ←  D →  |  W = EMPINAR  |  Pegue os gatinhos  |  Rampas com BOOST voam sobre buracos</div>
 
-<div id="menu">
+<div id="hud">
+  DISTÂNCIA: <span id="dist">0</span>m<br>
+  GATINHOS: <span id="cats">0</span>
+  &nbsp;|&nbsp; [M] Menu
+</div>
+<div id="hint">A ←  D →  |  W = EMPINAR  |  Pegue os gatinhos  |  BOOST nas rampas</div>
+
+<!-- MENU PRINCIPAL -->
+<div id="mainMenu" class="panel open">
+  <h1>MOTO PIXEL</h1>
+  <p>Colete gatinhos na pista infinita</p>
+  <button class="btn" id="btnPlay">JOGAR</button>
+  <button class="btn secondary" id="btnCollection">COLEÇÃO</button>
+</div>
+
+<!-- COLEÇÃO -->
+<div id="collectionMenu" class="panel">
   <h2>Coleção de Gatinhos</h2>
-  <p id="menuCount">0 / 0 coletados</p>
-  <div id="collection"></div>
-  <button id="closeBtn">Fechar (M ou ESC)</button>
+  <p id="colCount">0 coletados</p>
+  <div id="collectionGrid"></div>
+  <button class="btn secondary" id="btnBack">VOLTAR</button>
+</div>
+
+<!-- DETALHE DO GATINHO -->
+<div id="detail">
+  <h3 id="dName"></h3>
+  <canvas id="dSwatch" class="big-swatch" width="80" height="80"></canvas>
+  <p id="dDesc"></p>
+  <button class="close-detail" id="btnCloseDetail">Fechar</button>
 </div>
 
 <script>
@@ -128,166 +193,300 @@ ctx.imageSmoothingEnabled = false;
 const W = canvas.width;
 const H = canvas.height;
 
-// ========== IMAGENS ==========
 const imgPlayer = new Image();
 imgPlayer.src = 'img/player.png';
 
-// Gatinhos (opcional: img/cat1.png, cat2.png ...)
-const catImgs = [];
-for (let i = 1; i <= 12; i++) {
-  const im = new Image();
-  im.src = `img/cat${i}.png`;
-  catImgs.push(im);
-}
+// ========== CATÁLOGO DE GATINHOS (cores + misturas + curiosidades) ==========
+const CAT_DATA = [
+  { name: "Carvão",      colors: ["#1a1a1a","#333"],          mix: false, desc: "Preto puro. Dorme 18h por dia e ainda acorda cansado." },
+  { name: "Neve",        colors: ["#f5f5f5","#ddd"],          mix: false, desc: "Branco total. Seu miado é tão baixo que parece um suspiro." },
+  { name: "Laranja",     colors: ["#e67e22","#d35400"],       mix: false, desc: "Laranja clássico. Tem 50% mais chance de se perder em caixas." },
+  { name: "Cinza",       colors: ["#7f8c8d","#95a5a6"],       mix: false, desc: "Cinza sólido. Especialista em sumir em sofás da mesma cor." },
+  { name: "Chocolate",   colors: ["#6d4c41","#4e342e"],       mix: false, desc: "Marrom escuro. Odeia água, mas ama torneiras pingando." },
+  { name: "Creme",       colors: ["#f5e6c8","#e8d5a3"],       mix: false, desc: "Tom creme. Derrete de preguiça ao sol das 15h." },
+  { name: "Tigrado",     colors: ["#e67e22","#2c3e50"],       mix: true,  desc: "Laranja + preto. Corre na velocidade da luz… até ver um laser." },
+  { name: "Calico",      colors: ["#e74c3c","#f5f5f5","#2c3e50"], mix: true, desc: "Tricolor. Quase sempre fêmea e rainha absoluta da casa." },
+  { name: "Siamês",      colors: ["#f5e6c8","#4a3728"],       mix: true,  desc: "Creme com pontas escuras. Conversador nato, nunca cala a boca." },
+  { name: "Fumaça",      colors: ["#bdc3c7","#2c3e50"],       mix: true,  desc: "Cinza com base preta. Aparece e some como um fantasma." },
+  { name: "Dourado",     colors: ["#f1c40f","#e67e22"],       mix: true,  desc: "Amarelo dourado. Acredita ser o sol personificado." },
+  { name: "Azul-Russo",  colors: ["#5d6d7e","#85929e"],       mix: false, desc: "Azul-acinzentado. Elegante, reservado e viciado em carinho na cabeça." },
+  { name: "Rosa-Algodão",colors: ["#ff9ff3","#feca57"],       mix: true,  desc: "Rosa com toques amarelos. Existe só neste jogo… e no seu coração." },
+  { name: "Menta",       colors: ["#1dd1a1","#10ac84"],       mix: false, desc: "Verde-menta. Adora plantas e finge que não derrubou o vaso." },
+  { name: "Céu",         colors: ["#54a0ff","#2e86de"],       mix: false, desc: "Azul céu. Passa o dia olhando pela janela julgando os pássaros." },
+  { name: "Uva",         colors: ["#5f27cd","#341f97"],       mix: false, desc: "Roxo profundo. Misterioso e especialista em sumir às 3h da manhã." },
+  { name: "Arco-Íris",   colors: ["#ff6b6b","#feca57","#1dd1a1","#54a0ff"], mix: true, desc: "Todas as cores. Dizem que dá sorte… e pelos em tudo quanto é lugar." },
+  { name: "Sombra",      colors: ["#2c3e50","#1a1a2e"],       mix: true,  desc: "Preto azulado. Só é visto quando quer ser visto." },
+  { name: "Pêssego",     colors: ["#ff9f43","#feca57"],       mix: true,  desc: "Laranja claro. Derrete no colo em exatamente 4 segundos." },
+  { name: "Prata",       colors: ["#dfe6e9","#b2bec3"],       mix: false, desc: "Prateado brilhante. Reflete a luz e sua própria vaidade." }
+];
 
-// ========== FÍSICA ==========
+// ========== ESTADO ==========
+let state = 'menu'; // menu | playing | collection
+let collected = new Set(); // ids dos gatinhos pegos
+let nextCatId = 0;
+
+const player = {
+  x: 160, y: 300, vx: 0, vy: 0,
+  w: 90, h: 58, angle: 0,
+  grounded: false, onRamp: false, wheelie: false, boostTimer: 0
+};
+let camX = 0;
+
 const GRAVITY = 0.48;
 const MAX_SPEED = 9.5;
 const ACCEL = 0.30;
 const FRICTION = 0.935;
 const WHEELIE_TORQUE = 0.085;
-const WHEELIE_RETURN = 0.05;
 const MAX_WHEELIE = 1.1;
 
-// ========== PLAYER ==========
-const player = {
-  x: 160,
-  y: 300,
-  vx: 0,
-  vy: 0,
-  w: 90,
-  h: 58,
-  angle: 0,
-  grounded: false,
-  onRamp: false,
-  wheelie: false,
-  boostTimer: 0
-};
-
-let camX = 0;
-let menuOpen = false;
-
-// ========== NÍVEL ==========
+// ========== NÍVEL INFINITO ==========
 const level = [];
-const cats = []; // collectibles
+const cats = [];
+let lastGroundX = 0;
+let lastCatX = 0;
 
-function buildLevel() {
+function addGround(x, w) {
+  level.push({ type: 'ground', x, y: 420, w, h: 130 });
+  lastGroundX = x + w;
+}
+
+function addRampBoostGap() {
+  const rampW = 180 + Math.random() * 80;
+  const rampH = 120 + Math.random() * 50;
+  const gap = 220 + Math.random() * 120;
+  const boostW = 80 + Math.random() * 40;
+
+  level.push({ type: 'rampUp', x: lastGroundX, y: 420, w: rampW, h: rampH });
+  level.push({ type: 'boost',  x: lastGroundX + rampW * 0.55, y: 420 - rampH + 10, w: boostW, h: 18 });
+
+  // possível plataforma alternativa
+  if (Math.random() > 0.45) {
+    level.push({
+      type: 'platform',
+      x: lastGroundX + rampW + gap * 0.3,
+      y: 250 + Math.random() * 80,
+      w: 120 + Math.random() * 80,
+      h: 24
+    });
+  }
+
+  const nextX = lastGroundX + rampW + gap;
+  const groundW = 400 + Math.random() * 350;
+  addGround(nextX, groundW);
+}
+
+function spawnCat() {
+  // distância maior entre gatinhos
+  const minDist = 700;
+  const maxDist = 1400;
+  lastCatX += minDist + Math.random() * (maxDist - minDist);
+
+  // escolhe um tipo ainda não coletado ou qualquer
+  const typeId = nextCatId % CAT_DATA.length;
+  nextCatId++;
+
+  // altura: no chão ou em plataforma se houver
+  let cy = 375;
+  for (const seg of level) {
+    if (seg.type === 'platform' && lastCatX > seg.x && lastCatX < seg.x + seg.w) {
+      cy = seg.y - 45;
+      break;
+    }
+  }
+
+  cats.push({
+    x: lastCatX,
+    y: cy,
+    w: 38, h: 38,
+    typeId,
+    collected: false,
+    bob: Math.random() * Math.PI * 2
+  });
+}
+
+function generateAhead() {
+  while (lastGroundX < camX + W + 900) {
+    if (Math.random() > 0.35) {
+      addRampBoostGap();
+    } else {
+      const w = 500 + Math.random() * 400;
+      addGround(lastGroundX, w);
+      // pequena rampa decorativa
+      if (Math.random() > 0.6) {
+        level.push({
+          type: 'rampUp',
+          x: lastGroundX - w * 0.4,
+          y: 420,
+          w: 140,
+          h: 70
+        });
+        level.push({
+          type: 'platform',
+          x: lastGroundX - w * 0.4 + 140,
+          y: 350,
+          w: 180,
+          h: 24
+        });
+      }
+    }
+  }
+
+  while (lastCatX < camX + W + 1200) {
+    spawnCat();
+  }
+
+  // limpa segmentos muito atrás
+  while (level.length && level[0].x + (level[0].w || 0) < camX - 600) {
+    level.shift();
+  }
+  while (cats.length && cats[0].x < camX - 400) {
+    cats.shift();
+  }
+}
+
+function resetGame() {
   level.length = 0;
   cats.length = 0;
+  lastGroundX = 0;
+  lastCatX = 200;
+  nextCatId = 0;
+  player.x = 160;
+  player.y = 300;
+  player.vx = 0;
+  player.vy = 0;
+  player.angle = 0;
+  player.boostTimer = 0;
+  camX = 0;
+  addGround(0, 700);
+  generateAhead();
+}
 
-  // Início
-  level.push({ type: 'ground', x: 0, y: 420, w: 580, h: 130 });
+// ========== DESENHO DE GATINHO PIXEL ==========
+function drawCatPixel(ctx2, data, size, ox = 0, oy = 0) {
+  const s = size / 16;
+  // corpo
+  ctx2.fillStyle = data.colors[0];
+  ctx2.fillRect(ox + 3*s, oy + 7*s, 10*s, 7*s);
+  // cabeça
+  ctx2.fillStyle = data.colors[0];
+  ctx2.fillRect(ox + 4*s, oy + 2*s, 8*s, 6*s);
+  // orelhas
+  ctx2.fillRect(ox + 3*s, oy + 0*s, 3*s, 4*s);
+  ctx2.fillRect(ox + 10*s, oy + 0*s, 3*s, 4*s);
+  // mistura de cores
+  if (data.mix && data.colors.length > 1) {
+    ctx2.fillStyle = data.colors[1];
+    ctx2.fillRect(ox + 8*s, oy + 3*s, 4*s, 5*s);
+    ctx2.fillRect(ox + 5*s, oy + 9*s, 5*s, 4*s);
+    if (data.colors[2]) {
+      ctx2.fillStyle = data.colors[2];
+      ctx2.fillRect(ox + 4*s, oy + 4*s, 3*s, 3*s);
+    }
+    if (data.colors[3]) {
+      ctx2.fillStyle = data.colors[3];
+      ctx2.fillRect(ox + 9*s, oy + 10*s, 3*s, 3*s);
+    }
+  }
+  // olhos
+  ctx2.fillStyle = '#2d3436';
+  ctx2.fillRect(ox + 5*s, oy + 4*s, 2*s, 2*s);
+  ctx2.fillRect(ox + 9*s, oy + 4*s, 2*s, 2*s);
+  // focinho
+  ctx2.fillStyle = '#ff9ff3';
+  ctx2.fillRect(ox + 7*s, oy + 6*s, 2*s, 1*s);
+}
 
-  // Rampa + plataforma alta
-  level.push({ type: 'rampUp', x: 580, y: 420, w: 160, h: 100 });
-  level.push({ type: 'platform', x: 740, y: 320, w: 260, h: 28 });
-  level.push({ type: 'rampDown', x: 1000, y: 320, w: 140, h: 100 });
-  level.push({ type: 'ground', x: 580, y: 420, w: 700, h: 130 });
-
-  // 1º BURACO + BOOST
-  level.push({ type: 'rampUp', x: 1280, y: 420, w: 210, h: 135 });
-  level.push({ type: 'boost',  x: 1390, y: 295, w: 95, h: 18 });
-  level.push({ type: 'ground', x: 1720, y: 420, w: 480, h: 130 });
-  level.push({ type: 'platform', x: 1520, y: 255, w: 160, h: 24 });
-
-  // 2º BURACO
-  level.push({ type: 'rampUp', x: 2200, y: 420, w: 240, h: 155 });
-  level.push({ type: 'boost',  x: 2330, y: 275, w: 100, h: 18 });
-  level.push({ type: 'ground', x: 2740, y: 420, w: 420, h: 130 });
-  level.push({ type: 'platform', x: 2520, y: 295, w: 130, h: 22 });
-  level.push({ type: 'platform', x: 2880, y: 340, w: 150, h: 22 });
-
-  // 3º BURACO + caminho alto
-  level.push({ type: 'rampUp', x: 3160, y: 420, w: 190, h: 125 });
-  level.push({ type: 'boost',  x: 3260, y: 305, w: 85, h: 18 });
-  level.push({ type: 'platform', x: 3480, y: 275, w: 220, h: 26 });
-  level.push({ type: 'rampDown', x: 3700, y: 275, w: 160, h: 145 });
-  level.push({ type: 'ground', x: 3860, y: 420, w: 580, h: 130 });
-
-  // 4º BURACO
-  level.push({ type: 'rampUp', x: 4440, y: 420, w: 260, h: 165 });
-  level.push({ type: 'boost',  x: 4580, y: 265, w: 110, h: 20 });
-  level.push({ type: 'ground', x: 5020, y: 420, w: 900, h: 130 });
-  level.push({ type: 'platform', x: 4860, y: 295, w: 120, h: 22 });
-  level.push({ type: 'platform', x: 5160, y: 245, w: 170, h: 24 });
-  level.push({ type: 'platform', x: 5420, y: 315, w: 140, h: 22 });
-
-  // === GATINHOS (tokens) ===
-  const catPositions = [
-    { x: 350,  y: 380 },
-    { x: 820,  y: 280 },
-    { x: 1100, y: 380 },
-    { x: 1480, y: 220 },
-    { x: 1900, y: 380 },
-    { x: 2450, y: 240 },
-    { x: 2650, y: 380 },
-    { x: 3000, y: 300 },
-    { x: 3550, y: 235 },
-    { x: 4000, y: 380 },
-    { x: 4700, y: 220 },
-    { x: 5300, y: 205 }
-  ];
-
-  catPositions.forEach((p, i) => {
-    cats.push({
-      x: p.x,
-      y: p.y,
-      w: 36,
-      h: 36,
-      id: i,
-      collected: false,
-      bob: Math.random() * Math.PI * 2
-    });
+// ========== UI COLEÇÃO ==========
+function rebuildCollection() {
+  const grid = document.getElementById('collectionGrid');
+  grid.innerHTML = '';
+  CAT_DATA.forEach((data, i) => {
+    const got = collected.has(i);
+    const card = document.createElement('div');
+    card.className = 'cat-card' + (got ? ' got' : ' locked');
+    const cnv = document.createElement('canvas');
+    cnv.width = 48; cnv.height = 48;
+    cnv.className = 'swatch';
+    const c = cnv.getContext('2d');
+    c.imageSmoothingEnabled = false;
+    if (got) {
+      drawCatPixel(c, data, 48);
+    } else {
+      c.fillStyle = '#333';
+      c.fillRect(8, 8, 32, 32);
+      c.fillStyle = '#555';
+      c.font = '20px monospace';
+      c.fillText('?', 18, 30);
+    }
+    card.appendChild(cnv);
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = got ? data.name : '???';
+    card.appendChild(name);
+    if (got) {
+      card.onclick = () => showDetail(i);
+    }
+    grid.appendChild(card);
   });
-
-  document.getElementById('totalCats').textContent = cats.length;
-  buildCollectionUI();
+  document.getElementById('colCount').textContent = collected.size + ' / ' + CAT_DATA.length + ' coletados';
+  document.getElementById('cats').textContent = collected.size;
 }
 
-function buildCollectionUI() {
-  const box = document.getElementById('collection');
-  box.innerHTML = '';
-  cats.forEach((c, i) => {
-    const slot = document.createElement('div');
-    slot.className = 'cat-slot' + (c.collected ? ' got' : '');
-    slot.id = 'slot' + i;
-    slot.textContent = c.collected ? '🐱' : '?';
-    box.appendChild(slot);
-  });
-  updateMenuCount();
+function showDetail(id) {
+  const data = CAT_DATA[id];
+  document.getElementById('dName').textContent = data.name;
+  document.getElementById('dDesc').textContent = data.desc;
+  const cnv = document.getElementById('dSwatch');
+  const c = cnv.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  c.clearRect(0, 0, 80, 80);
+  drawCatPixel(c, data, 80);
+  document.getElementById('detail').classList.add('open');
 }
-
-function updateMenuCount() {
-  const got = cats.filter(c => c.collected).length;
-  document.getElementById('menuCount').textContent = `${got} / ${cats.length} coletados`;
-  document.getElementById('cats').textContent = got;
-}
-
-buildLevel();
 
 // ========== INPUT ==========
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
-
   if (e.code === 'KeyM' || e.code === 'Escape') {
-    toggleMenu();
+    if (state === 'playing') openMainMenu();
+    else if (state === 'collection') openMainMenu();
   }
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-document.getElementById('closeBtn').onclick = () => toggleMenu(false);
+document.getElementById('btnPlay').onclick = () => {
+  state = 'playing';
+  document.getElementById('mainMenu').classList.remove('open');
+  document.getElementById('collectionMenu').classList.remove('open');
+  document.getElementById('hud').style.display = 'block';
+  document.getElementById('hint').style.display = 'block';
+  resetGame();
+};
+document.getElementById('btnCollection').onclick = () => {
+  state = 'collection';
+  document.getElementById('mainMenu').classList.remove('open');
+  document.getElementById('collectionMenu').classList.add('open');
+  rebuildCollection();
+};
+document.getElementById('btnBack').onclick = openMainMenu;
+document.getElementById('btnCloseDetail').onclick = () => {
+  document.getElementById('detail').classList.remove('open');
+};
 
-function toggleMenu(force) {
-  menuOpen = force !== undefined ? force : !menuOpen;
-  document.getElementById('menu').classList.toggle('open', menuOpen);
+function openMainMenu() {
+  state = 'menu';
+  document.getElementById('mainMenu').classList.add('open');
+  document.getElementById('collectionMenu').classList.remove('open');
+  document.getElementById('detail').classList.remove('open');
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('hint').style.display = 'none';
 }
 
-// ========== HELPERS ==========
+// ========== FÍSICA ==========
 function getSegmentY(seg, px) {
-  if (seg.type === 'ground' || seg.type === 'platform') return seg.y;
-  if (seg.type === 'boost') return seg.y;
+  if (seg.type === 'ground' || seg.type === 'platform' || seg.type === 'boost') return seg.y;
   if (seg.type === 'rampUp') {
     const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
     return seg.y - t * seg.h;
@@ -298,26 +497,21 @@ function getSegmentY(seg, px) {
   }
   return seg.y;
 }
-
 function getSegmentSlope(seg) {
   if (seg.type === 'rampUp') return -seg.h / seg.w;
   if (seg.type === 'rampDown') return seg.h / seg.w;
   return 0;
 }
 
-// ========== UPDATE ==========
 function update() {
-  if (menuOpen) return;
+  if (state !== 'playing') return;
 
-  // Movimento
   if (keys['KeyD'] || keys['ArrowRight']) player.vx += ACCEL;
   if (keys['KeyA'] || keys['ArrowLeft'])  player.vx -= ACCEL;
-
   player.vx = Math.max(-MAX_SPEED * 0.6, Math.min(MAX_SPEED, player.vx));
   if (player.grounded) player.vx *= FRICTION;
   else player.vx *= 0.997;
 
-  // Wheelie para cima (ângulo negativo)
   if (keys['KeyW'] || keys['ArrowUp']) {
     if (player.grounded || player.onRamp) {
       player.angle -= WHEELIE_TORQUE;
@@ -325,45 +519,33 @@ function update() {
     }
   } else {
     player.wheelie = false;
-    if (player.grounded || player.onRamp) {
-      player.angle *= (1 - WHEELIE_RETURN * 2.2);
-    } else {
-      player.angle *= 0.97;
-    }
+    if (player.grounded || player.onRamp) player.angle *= 0.9;
+    else player.angle *= 0.97;
   }
-  player.angle = Math.max(-MAX_WHEELIE, Math.min(0.18, player.angle));
+  player.angle = Math.max(-MAX_WHEELIE, Math.min(0.15, player.angle));
 
-  // Boost (só velocidade horizontal extra, sem forçar vy negativa residual)
   if (player.boostTimer > 0) {
     player.boostTimer--;
-    player.vx = Math.min(player.vx + 0.55, MAX_SPEED + 5);
+    player.vx = Math.min(player.vx + 0.5, MAX_SPEED + 5);
   }
 
-  // Gravidade
   player.vy += GRAVITY;
-  if (player.vy > 16) player.vy = 16;
+  if (player.vy > 15) player.vy = 15;
 
-  // Movimento
   player.x += player.vx;
   player.y += player.vy;
 
-  // ===== COLISÃO ROBUSTA =====
+  // colisão
   player.grounded = false;
   player.onRamp = false;
-
   const feetX = player.x + player.w * 0.42;
-  let feetY = player.y + player.h;
+  const feetY = player.y + player.h;
 
-  // Ordena segmentos sob o player e pega o mais alto (topo)
-  let bestY = null;
-  let bestSeg = null;
-
+  let bestY = null, bestSeg = null;
   for (const seg of level) {
     if (feetX < seg.x - 8 || feetX > seg.x + seg.w + 8) continue;
     const surfaceY = getSegmentY(seg, feetX);
-
-    // Só considera se o pé está perto ou acima da superfície
-    if (feetY >= surfaceY - 14 && player.y + player.h * 0.4 < surfaceY + 30) {
+    if (feetY >= surfaceY - 14 && player.y + player.h * 0.35 < surfaceY + 35) {
       if (bestY === null || surfaceY < bestY) {
         bestY = surfaceY;
         bestSeg = seg;
@@ -372,67 +554,53 @@ function update() {
   }
 
   if (bestSeg && bestY !== null) {
-    // Se está caindo ou já está em cima
     if (player.vy >= -2 || feetY >= bestY - 6) {
-      // Snap para o chão
       player.y = bestY - player.h;
       player.vy = 0;
       player.grounded = true;
 
       if (bestSeg.type === 'boost') {
-        // Boost seguro: impulsão controlada + timer
         if (player.boostTimer <= 0) {
-          player.boostTimer = 32;
-          player.vy = -7.2; // impulsão limpa
+          player.boostTimer = 30;
+          player.vy = -7.0;
           player.grounded = false;
         }
       } else if (bestSeg.type === 'rampUp' || bestSeg.type === 'rampDown') {
         player.onRamp = true;
-        const slope = getSegmentSlope(bestSeg);
-        const rampAngle = Math.atan(slope);
-        if (!player.wheelie) {
-          player.angle = player.angle * 0.6 + rampAngle * 0.4;
-        }
-      } else {
-        if (!player.wheelie) player.angle *= 0.8;
+        const rampAngle = Math.atan(getSegmentSlope(bestSeg));
+        if (!player.wheelie) player.angle = player.angle * 0.55 + rampAngle * 0.45;
+      } else if (!player.wheelie) {
+        player.angle *= 0.8;
       }
     }
   }
 
-  // Coletar gatinhos
+  // coletar gatinhos
   for (const cat of cats) {
     if (cat.collected) continue;
-    const cx = cat.x + cat.w / 2;
-    const cy = cat.y + cat.h / 2 + Math.sin(Date.now() / 200 + cat.bob) * 6;
-    const px = player.x + player.w / 2;
-    const py = player.y + player.h / 2;
-    if (Math.abs(px - cx) < 40 && Math.abs(py - cy) < 40) {
+    const cx = cat.x + 19;
+    const cy = cat.y + 19 + Math.sin(Date.now() / 200 + cat.bob) * 5;
+    if (Math.abs(player.x + 45 - cx) < 42 && Math.abs(player.y + 30 - cy) < 42) {
       cat.collected = true;
-      updateMenuCount();
-      const slot = document.getElementById('slot' + cat.id);
-      if (slot) {
-        slot.classList.add('got');
-        slot.textContent = '🐱';
-      }
+      collected.add(cat.typeId);
+      document.getElementById('cats').textContent = collected.size;
     }
   }
 
-  // Queda
-  if (player.y > H + 200) {
-    player.x = 160;
+  if (player.y > H + 220) {
+    player.x = Math.max(160, player.x - 400);
     player.y = 300;
     player.vx = 0;
     player.vy = 0;
     player.angle = 0;
     player.boostTimer = 0;
-    camX = 0;
   }
 
-  // Câmera
-  const targetCam = player.x - W * 0.30;
-  camX += (targetCam - camX) * 0.13;
+  const targetCam = player.x - W * 0.28;
+  camX += (targetCam - camX) * 0.12;
   if (camX < 0) camX = 0;
 
+  generateAhead();
   document.getElementById('dist').textContent = Math.max(0, Math.floor((player.x - 160) / 10));
 }
 
@@ -440,96 +608,63 @@ function update() {
 function drawBackground() {
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, '#0f0c29');
-  grad.addColorStop(0.55, '#302b63');
+  grad.addColorStop(0.5, '#302b63');
   grad.addColorStop(1, '#24243e');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
   ctx.fillStyle = '#fff';
-  for (let i = 0; i < 50; i++) {
-    const sx = ((i * 149 + camX * 0.1) % (W + 40)) - 20;
-    const sy = (i * 89) % (H * 0.48);
-    ctx.globalAlpha = 0.3 + (i % 4) * 0.15;
+  for (let i = 0; i < 45; i++) {
+    const sx = ((i * 157 + camX * 0.08) % (W + 30)) - 15;
+    const sy = (i * 91) % (H * 0.45);
+    ctx.globalAlpha = 0.25 + (i % 3) * 0.2;
     ctx.fillRect(sx, sy, 2, 2);
   }
   ctx.globalAlpha = 1;
-
-  ctx.fillStyle = '#1a1a2e';
-  for (let i = 0; i < 6; i++) {
-    const mx = ((i * 260) - camX * 0.22) % (W + 300) - 100;
-    ctx.beginPath();
-    ctx.moveTo(mx, H);
-    ctx.lineTo(mx + 130, H - 95 - (i % 3) * 30);
-    ctx.lineTo(mx + 260, H);
-    ctx.fill();
-  }
 }
 
 function drawSegment(seg) {
   const sx = seg.x - camX;
-  if (sx + seg.w < -50 || sx > W + 50) return;
+  if (sx + (seg.w || 0) < -40 || sx > W + 40) return;
 
   if (seg.type === 'ground') {
     ctx.fillStyle = '#2d3436';
     ctx.fillRect(sx, seg.y, seg.w, seg.h);
     ctx.fillStyle = '#636e72';
-    ctx.fillRect(sx, seg.y, seg.w, 6);
-    ctx.fillStyle = '#b2bec3';
-    for (let i = 0; i < seg.w; i += 68) ctx.fillRect(sx + i, seg.y + 2, 30, 3);
+    ctx.fillRect(sx, seg.y, seg.w, 5);
     ctx.fillStyle = '#00b894';
-    ctx.fillRect(sx, seg.y - 5, seg.w, 6);
-  }
-  else if (seg.type === 'platform') {
+    ctx.fillRect(sx, seg.y - 4, seg.w, 5);
+  } else if (seg.type === 'platform') {
     ctx.fillStyle = '#6c5ce7';
     ctx.fillRect(sx, seg.y, seg.w, seg.h);
     ctx.fillStyle = '#a29bfe';
-    ctx.fillRect(sx, seg.y, seg.w, 5);
-  }
-  else if (seg.type === 'rampUp') {
+    ctx.fillRect(sx, seg.y, seg.w, 4);
+  } else if (seg.type === 'rampUp') {
     ctx.beginPath();
-    ctx.moveTo(sx, seg.y + 6);
-    ctx.lineTo(sx + seg.w, seg.y - seg.h + 6);
-    ctx.lineTo(sx + seg.w, seg.y + 90);
-    ctx.lineTo(sx, seg.y + 90);
+    ctx.moveTo(sx, seg.y + 5);
+    ctx.lineTo(sx + seg.w, seg.y - seg.h + 5);
+    ctx.lineTo(sx + seg.w, seg.y + 80);
+    ctx.lineTo(sx, seg.y + 80);
     ctx.closePath();
     ctx.fillStyle = '#2d3436';
     ctx.fill();
     ctx.beginPath();
     ctx.moveTo(sx, seg.y);
     ctx.lineTo(sx + seg.w, seg.y - seg.h);
-    ctx.lineTo(sx + seg.w, seg.y - seg.h + 7);
-    ctx.lineTo(sx, seg.y + 7);
+    ctx.lineTo(sx + seg.w, seg.y - seg.h + 6);
+    ctx.lineTo(sx, seg.y + 6);
     ctx.closePath();
     ctx.fillStyle = '#00b894';
     ctx.fill();
-  }
-  else if (seg.type === 'rampDown') {
-    ctx.beginPath();
-    ctx.moveTo(sx, seg.y + 6);
-    ctx.lineTo(sx + seg.w, seg.y + seg.h + 6);
-    ctx.lineTo(sx + seg.w, seg.y + seg.h + 90);
-    ctx.lineTo(sx, seg.y + 90);
-    ctx.closePath();
-    ctx.fillStyle = '#2d3436';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(sx, seg.y);
-    ctx.lineTo(sx + seg.w, seg.y + seg.h);
-    ctx.lineTo(sx + seg.w, seg.y + seg.h + 7);
-    ctx.lineTo(sx, seg.y + 7);
-    ctx.closePath();
-    ctx.fillStyle = '#00b894';
-    ctx.fill();
-  }
-  else if (seg.type === 'boost') {
-    const pulse = 0.55 + Math.sin(Date.now() / 110) * 0.45;
+  } else if (seg.type === 'boost') {
+    const pulse = 0.5 + Math.sin(Date.now() / 100) * 0.5;
     ctx.fillStyle = `rgba(255,190,0,${pulse})`;
     ctx.fillRect(sx, seg.y, seg.w, seg.h);
     ctx.fillStyle = '#ff9f1a';
-    ctx.fillRect(sx + 3, seg.y + 3, seg.w - 6, seg.h - 6);
+    ctx.fillRect(sx + 2, seg.y + 2, seg.w - 4, seg.h - 4);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 11px Courier New';
-    ctx.fillText('>> BOOST', sx + 8, seg.y + 14);
+    ctx.font = 'bold 10px Courier New';
+    ctx.fillText('BOOST', sx + 6, seg.y + 13);
   }
 }
 
@@ -537,35 +672,15 @@ function drawCats() {
   for (const cat of cats) {
     if (cat.collected) continue;
     const sx = cat.x - camX;
-    if (sx < -40 || sx > W + 40) continue;
-    const bob = Math.sin(Date.now() / 220 + cat.bob) * 6;
-    const sy = cat.y + bob;
-
-    // tenta imagem
-    const img = catImgs[cat.id % catImgs.length];
-    if (img && img.complete && img.naturalWidth > 0) {
-      ctx.drawImage(img, sx, sy, cat.w, cat.h);
-    } else {
-      // fallback pixel cat
-      ctx.fillStyle = '#ff9ff3';
-      ctx.fillRect(sx + 6, sy + 10, 24, 20);
-      ctx.fillStyle = '#feca57';
-      ctx.fillRect(sx + 10, sy + 4, 16, 12); // cabeça
-      ctx.fillStyle = '#2d3436';
-      ctx.fillRect(sx + 12, sy + 8, 4, 4);
-      ctx.fillRect(sx + 20, sy + 8, 4, 4);
-      // orelhas
-      ctx.fillStyle = '#ff9ff3';
-      ctx.fillRect(sx + 8, sy, 6, 8);
-      ctx.fillRect(sx + 22, sy, 6, 8);
-    }
+    if (sx < -50 || sx > W + 50) continue;
+    const bob = Math.sin(Date.now() / 220 + cat.bob) * 5;
+    drawCatPixel(ctx, CAT_DATA[cat.typeId], 38, sx, cat.y + bob);
   }
 }
 
 function drawPlayer() {
   const px = player.x - camX;
   const py = player.y;
-
   ctx.save();
   ctx.translate(px + player.w * 0.38, py + player.h * 0.72);
   ctx.rotate(player.angle);
@@ -573,49 +688,35 @@ function drawPlayer() {
   if (imgPlayer.complete && imgPlayer.naturalWidth > 0) {
     ctx.drawImage(imgPlayer, -player.w * 0.38, -player.h * 0.72, player.w, player.h);
   } else {
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-30, -8, 24, 24);
-    ctx.fillStyle = '#555';
-    ctx.fillRect(-24, -2, 12, 12);
-    ctx.fillStyle = '#111';
-    ctx.fillRect(24, -8, 22, 22);
-    ctx.fillStyle = '#555';
-    ctx.fillRect(29, -2, 12, 12);
-    ctx.fillStyle = '#c0392b';
-    ctx.fillRect(-18, -20, 50, 16);
-    ctx.fillStyle = '#e74c3c';
-    ctx.fillRect(-6, -30, 30, 14);
-    ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(24, -38, 6, 22);
+    ctx.fillStyle = '#111'; ctx.fillRect(-30, -8, 24, 24);
+    ctx.fillStyle = '#555'; ctx.fillRect(-24, -2, 12, 12);
+    ctx.fillStyle = '#111'; ctx.fillRect(24, -8, 22, 22);
+    ctx.fillStyle = '#555'; ctx.fillRect(29, -2, 12, 12);
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(-18, -20, 50, 16);
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(-6, -30, 30, 14);
+    ctx.fillStyle = '#2c3e50'; ctx.fillRect(24, -38, 6, 22);
     ctx.fillRect(18, -40, 18, 6);
-    ctx.fillStyle = '#3498db';
-    ctx.fillRect(-2, -44, 16, 20);
-    ctx.fillStyle = '#f1c40f';
-    ctx.fillRect(0, -56, 14, 14);
-    ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(3, -52, 9, 5);
-    ctx.fillStyle = '#3498db';
-    ctx.fillRect(12, -38, 14, 7);
+    ctx.fillStyle = '#3498db'; ctx.fillRect(-2, -44, 16, 20);
+    ctx.fillStyle = '#f1c40f'; ctx.fillRect(0, -56, 14, 14);
+    ctx.fillStyle = '#2c3e50'; ctx.fillRect(3, -52, 9, 5);
+    ctx.fillStyle = '#3498db'; ctx.fillRect(12, -38, 14, 7);
   }
   ctx.restore();
 
   if (player.boostTimer > 0) {
-    ctx.fillStyle = 'rgba(255,180,0,0.85)';
-    ctx.font = 'bold 13px Courier New';
-    ctx.fillText('BOOST!', px, py - 18);
-  }
-  if (player.wheelie) {
-    ctx.fillStyle = '#00ff88';
-    ctx.font = '12px Courier New';
-    ctx.fillText('WHEELIE!', px - 6, py - 34);
+    ctx.fillStyle = 'rgba(255,180,0,0.9)';
+    ctx.font = 'bold 12px Courier New';
+    ctx.fillText('BOOST!', px, py - 16);
   }
 }
 
 function draw() {
   drawBackground();
-  for (const seg of level) drawSegment(seg);
-  drawCats();
-  drawPlayer();
+  if (state === 'playing') {
+    for (const seg of level) drawSegment(seg);
+    drawCats();
+    drawPlayer();
+  }
 }
 
 function loop() {
