@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Moto Pixel - Ramps & Paths</title>
+<title>Moto Pixel - Ramps & Boost</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -50,7 +50,7 @@ canvas {
 <body>
 <canvas id="c" width="960" height="540"></canvas>
 <div id="ui">DISTÂNCIA: <span id="dist">0</span>m</div>
-<div id="hint">A ←  D →  |  W = EMPINAR  |  Chegue o mais longe possível</div>
+<div id="hint">A ←  D →  |  W = EMPINAR (para cima)  |  Use as rampas com BOOST para voar sobre os buracos</div>
 
 <script>
 const canvas = document.getElementById('c');
@@ -61,83 +61,90 @@ const W = canvas.width;
 const H = canvas.height;
 
 // ========== IMAGENS (pasta img/) ==========
-// player.png  → moto + personagem (~96x64 px recomendado)
-// ramp.png    → opcional (tile de rampa)
 const imgPlayer = new Image();
 imgPlayer.src = 'img/player.png';
 
 // ========== FÍSICA ==========
-const GRAVITY = 0.55;
-const MAX_SPEED = 9;
-const ACCEL = 0.28;
-const FRICTION = 0.92;
-const WHEELIE_TORQUE = 0.08;
-const WHEELIE_RETURN = 0.04;
-const MAX_WHEELIE = 1.1; // radianos (~63°)
+const GRAVITY = 0.52;
+const MAX_SPEED = 10;
+const ACCEL = 0.32;
+const FRICTION = 0.93;
+const WHEELIE_TORQUE = 0.09;
+const WHEELIE_RETURN = 0.05;
+const MAX_WHEELIE = 1.15; // radianos (~66°)
 
 // ========== PLAYER ==========
 const player = {
-  x: 180,
+  x: 160,
   y: 300,
   vx: 0,
   vy: 0,
   w: 90,
   h: 58,
-  angle: 0,          // rotação da moto (wheelie)
+  angle: 0,
   grounded: false,
   onRamp: false,
-  wheelie: false
+  wheelie: false,
+  boostTimer: 0
 };
 
 // ========== CÂMERA ==========
 let camX = 0;
 
-// ========== NÍVEL (plataformas + rampas) ==========
-// type: 'ground' | 'platform' | 'rampUp' | 'rampDown'
+// ========== NÍVEL ==========
+// type: 'ground' | 'platform' | 'rampUp' | 'rampDown' | 'boost'
 const level = [];
 
 function buildLevel() {
   level.length = 0;
 
-  // Chão inicial longo
-  level.push({ type: 'ground', x: 0, y: 420, w: 700, h: 120 });
+  // === INÍCIO ===
+  level.push({ type: 'ground', x: 0, y: 420, w: 600, h: 130 });
 
-  // Rampa subindo + plataforma alta (caminho superior)
-  level.push({ type: 'rampUp', x: 700, y: 420, w: 180, h: 90 });
-  level.push({ type: 'platform', x: 880, y: 330, w: 320, h: 30 });
-  level.push({ type: 'rampDown', x: 1200, y: 330, w: 160, h: 90 });
+  // Rampa + plataforma alta (caminho alternativo)
+  level.push({ type: 'rampUp', x: 600, y: 420, w: 160, h: 100 });
+  level.push({ type: 'platform', x: 760, y: 320, w: 280, h: 28 });
+  level.push({ type: 'rampDown', x: 1040, y: 320, w: 140, h: 100 });
 
-  // Caminho inferior (alternativa)
-  level.push({ type: 'ground', x: 700, y: 420, w: 900, h: 120 });
+  // Chão inferior paralelo
+  level.push({ type: 'ground', x: 600, y: 420, w: 700, h: 130 });
 
-  // Segunda rampa + plataforma média
-  level.push({ type: 'rampUp', x: 1600, y: 420, w: 200, h: 110 });
-  level.push({ type: 'platform', x: 1800, y: 310, w: 280, h: 28 });
-  level.push({ type: 'rampDown', x: 2080, y: 310, w: 150, h: 110 });
+  // === PRIMEIRO BURACO (com rampa + BOOST) ===
+  level.push({ type: 'rampUp', x: 1300, y: 420, w: 200, h: 130 });
+  level.push({ type: 'boost',  x: 1400, y: 300, w: 90,  h: 20 }); // zona de boost
+  // buraco de ~220px
+  level.push({ type: 'ground', x: 1720, y: 420, w: 500, h: 130 });
 
-  // Chão intermediário
-  level.push({ type: 'ground', x: 1600, y: 420, w: 800, h: 120 });
+  // Caminho alto alternativo
+  level.push({ type: 'platform', x: 1550, y: 260, w: 180, h: 24 });
 
-  // Plataforma alta isolada (pulo com wheelie ajuda)
-  level.push({ type: 'platform', x: 2450, y: 260, w: 200, h: 26 });
+  // === SEGUNDO BURACO (maior) ===
+  level.push({ type: 'rampUp', x: 2220, y: 420, w: 240, h: 150 });
+  level.push({ type: 'boost',  x: 2350, y: 280, w: 100, h: 20 });
+  // buraco de ~280px
+  level.push({ type: 'ground', x: 2740, y: 420, w: 450, h: 130 });
 
-  // Rampa grande final
-  level.push({ type: 'rampUp', x: 2700, y: 420, w: 280, h: 160 });
-  level.push({ type: 'platform', x: 2980, y: 260, w: 400, h: 30 });
-  level.push({ type: 'rampDown', x: 3380, y: 260, w: 200, h: 160 });
+  // Plataformas intermediárias
+  level.push({ type: 'platform', x: 2550, y: 300, w: 140, h: 22 });
+  level.push({ type: 'platform', x: 2900, y: 340, w: 160, h: 22 });
 
-  // Chão contínuo
-  level.push({ type: 'ground', x: 2700, y: 420, w: 1200, h: 120 });
+  // === TERCEIRO BURACO + caminho alto ===
+  level.push({ type: 'rampUp', x: 3190, y: 420, w: 180, h: 120 });
+  level.push({ type: 'boost',  x: 3280, y: 310, w: 80,  h: 18 });
+  level.push({ type: 'platform', x: 3500, y: 280, w: 220, h: 26 });
+  level.push({ type: 'rampDown', x: 3720, y: 280, w: 160, h: 140 });
+  level.push({ type: 'ground', x: 3880, y: 420, w: 600, h: 130 });
 
-  // Mais caminhos alternativos
-  level.push({ type: 'platform', x: 3600, y: 340, w: 180, h: 24 });
-  level.push({ type: 'platform', x: 3850, y: 280, w: 160, h: 24 });
-  level.push({ type: 'platform', x: 4100, y: 220, w: 220, h: 24 });
+  // === QUARTO BURACO (desafio final) ===
+  level.push({ type: 'rampUp', x: 4480, y: 420, w: 260, h: 160 });
+  level.push({ type: 'boost',  x: 4620, y: 270, w: 110, h: 22 });
+  // buraco grande
+  level.push({ type: 'ground', x: 5050, y: 420, w: 800, h: 130 });
 
-  // Rampa final + chão infinito-ish
-  level.push({ type: 'rampUp', x: 4400, y: 420, w: 220, h: 130 });
-  level.push({ type: 'platform', x: 4620, y: 290, w: 350, h: 28 });
-  level.push({ type: 'ground', x: 4400, y: 420, w: 2000, h: 120 });
+  // Plataformas extras no final
+  level.push({ type: 'platform', x: 4900, y: 300, w: 120, h: 22 });
+  level.push({ type: 'platform', x: 5200, y: 250, w: 180, h: 24 });
+  level.push({ type: 'platform', x: 5450, y: 320, w: 150, h: 22 });
 }
 
 buildLevel();
@@ -152,10 +159,9 @@ window.addEventListener('keyup', e => {
   keys[e.code] = false;
 });
 
-// ========== HELPERS DE COLISÃO ==========
+// ========== HELPERS ==========
 function getSegmentY(seg, px) {
-  // Retorna a altura do topo do segmento em px
-  if (seg.type === 'ground' || seg.type === 'platform') {
+  if (seg.type === 'ground' || seg.type === 'platform' || seg.type === 'boost') {
     return seg.y;
   }
   if (seg.type === 'rampUp') {
@@ -177,41 +183,38 @@ function getSegmentSlope(seg) {
 
 // ========== UPDATE ==========
 function update() {
-  // Aceleração
-  if (keys['KeyD'] || keys['ArrowRight']) {
-    player.vx += ACCEL;
-  }
-  if (keys['KeyA'] || keys['ArrowLeft']) {
-    player.vx -= ACCEL;
-  }
+  // Movimento horizontal
+  if (keys['KeyD'] || keys['ArrowRight']) player.vx += ACCEL;
+  if (keys['KeyA'] || keys['ArrowLeft'])  player.vx -= ACCEL;
 
-  // Limites de velocidade
-  player.vx = Math.max(-MAX_SPEED * 0.7, Math.min(MAX_SPEED, player.vx));
+  player.vx = Math.max(-MAX_SPEED * 0.65, Math.min(MAX_SPEED, player.vx));
 
-  // Fricção no chão
-  if (player.grounded) {
-    player.vx *= FRICTION;
-  } else {
-    player.vx *= 0.995;
-  }
+  if (player.grounded) player.vx *= FRICTION;
+  else player.vx *= 0.997;
 
-  // Wheelie (W)
+  // === WHEELIE PARA CIMA (ângulo negativo = frente sobe) ===
   if (keys['KeyW'] || keys['ArrowUp']) {
     if (player.grounded || player.onRamp) {
-      player.angle += WHEELIE_TORQUE;
+      player.angle -= WHEELIE_TORQUE; // negativo = empina para cima
       player.wheelie = true;
     }
   } else {
     player.wheelie = false;
-    // Retorna ao ângulo do chão
     if (player.grounded || player.onRamp) {
-      player.angle *= (1 - WHEELIE_RETURN * 2);
+      // volta ao ângulo do chão/rampa
+      player.angle *= (1 - WHEELIE_RETURN * 2.2);
     } else {
-      // No ar o ângulo tende a estabilizar
-      player.angle *= 0.98;
+      player.angle *= 0.97;
     }
   }
-  player.angle = Math.max(-0.15, Math.min(MAX_WHEELIE, player.angle));
+  // Limites: 0 = plano, -MAX_WHEELIE = empina máximo para cima
+  player.angle = Math.max(-MAX_WHEELIE, Math.min(0.2, player.angle));
+
+  // Boost timer
+  if (player.boostTimer > 0) {
+    player.boostTimer--;
+    player.vx = Math.min(player.vx + 0.45, MAX_SPEED + 4);
+  }
 
   // Gravidade
   player.vy += GRAVITY;
@@ -220,165 +223,170 @@ function update() {
   player.x += player.vx;
   player.y += player.vy;
 
-  // Colisão com o nível
+  // Colisão
   player.grounded = false;
   player.onRamp = false;
 
-  const feetX = player.x + player.w * 0.5;
+  const feetX = player.x + player.w * 0.45;
   const feetY = player.y + player.h;
 
   for (const seg of level) {
-    if (feetX < seg.x - 10 || feetX > seg.x + seg.w + 10) continue;
+    if (feetX < seg.x - 12 || feetX > seg.x + seg.w + 12) continue;
 
     const surfaceY = getSegmentY(seg, feetX);
     const slope = getSegmentSlope(seg);
 
-    // Só colide se estiver caindo ou quase no chão
-    if (player.vy >= -1 && feetY >= surfaceY - 8 && feetY <= surfaceY + 18) {
+    if (player.vy >= -1.5 && feetY >= surfaceY - 10 && feetY <= surfaceY + 20) {
       player.y = surfaceY - player.h;
       player.vy = 0;
       player.grounded = true;
 
+      // BOOST
+      if (seg.type === 'boost') {
+        player.boostTimer = 28;
+        // impulsão vertical extra
+        player.vy = -6.5;
+        player.grounded = false;
+      }
+
       if (seg.type === 'rampUp' || seg.type === 'rampDown') {
         player.onRamp = true;
-        // Ajusta ângulo base da rampa
         const rampAngle = Math.atan(slope);
         if (!player.wheelie) {
-          player.angle = player.angle * 0.7 + rampAngle * 0.3;
+          player.angle = player.angle * 0.65 + rampAngle * 0.35;
         }
-      } else {
-        if (!player.wheelie) {
-          player.angle *= 0.85;
-        }
+      } else if (seg.type !== 'boost') {
+        if (!player.wheelie) player.angle *= 0.82;
       }
       break;
     }
   }
 
-  // Morte se cair muito
-  if (player.y > H + 200) {
-    // Respawn no início
-    player.x = 180;
+  // Queda = respawn
+  if (player.y > H + 180) {
+    player.x = 160;
     player.y = 300;
     player.vx = 0;
     player.vy = 0;
     player.angle = 0;
+    player.boostTimer = 0;
     camX = 0;
   }
 
-  // Câmera segue o player
-  const targetCam = player.x - W * 0.35;
-  camX += (targetCam - camX) * 0.12;
+  // Câmera
+  const targetCam = player.x - W * 0.32;
+  camX += (targetCam - camX) * 0.14;
   if (camX < 0) camX = 0;
 
-  // Distância
-  document.getElementById('dist').textContent = Math.max(0, Math.floor((player.x - 180) / 10));
+  document.getElementById('dist').textContent = Math.max(0, Math.floor((player.x - 160) / 10));
 }
 
 // ========== DRAW ==========
 function drawBackground() {
-  // Céu
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, '#0f0c29');
-  grad.addColorStop(0.5, '#302b63');
+  grad.addColorStop(0.55, '#302b63');
   grad.addColorStop(1, '#24243e');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  // Estrelas
-  ctx.fillStyle = '#ffffff';
-  for (let i = 0; i < 60; i++) {
-    const sx = ((i * 137 + camX * 0.15) % (W + 40)) - 20;
-    const sy = (i * 97) % (H * 0.55);
-    ctx.globalAlpha = 0.4 + (i % 3) * 0.2;
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 55; i++) {
+    const sx = ((i * 149 + camX * 0.12) % (W + 50)) - 25;
+    const sy = (i * 89) % (H * 0.5);
+    ctx.globalAlpha = 0.35 + (i % 4) * 0.15;
     ctx.fillRect(sx, sy, 2, 2);
   }
   ctx.globalAlpha = 1;
 
-  // Montanhas distantes
+  // Montanhas
   ctx.fillStyle = '#1a1a2e';
-  for (let i = 0; i < 8; i++) {
-    const mx = ((i * 220) - camX * 0.3) % (W + 300) - 100;
+  for (let i = 0; i < 7; i++) {
+    const mx = ((i * 240) - camX * 0.25) % (W + 320) - 120;
     ctx.beginPath();
     ctx.moveTo(mx, H);
-    ctx.lineTo(mx + 110, H - 90 - (i % 3) * 30);
-    ctx.lineTo(mx + 220, H);
+    ctx.lineTo(mx + 120, H - 100 - (i % 3) * 35);
+    ctx.lineTo(mx + 240, H);
     ctx.fill();
   }
 }
 
 function drawSegment(seg) {
   const sx = seg.x - camX;
-  if (sx + seg.w < -50 || sx > W + 50) return;
-
-  ctx.save();
+  if (sx + seg.w < -60 || sx > W + 60) return;
 
   if (seg.type === 'ground') {
-    // Chão
     ctx.fillStyle = '#2d3436';
     ctx.fillRect(sx, seg.y, seg.w, seg.h);
-    // Faixa
     ctx.fillStyle = '#636e72';
     ctx.fillRect(sx, seg.y, seg.w, 6);
-    // Marcas
     ctx.fillStyle = '#b2bec3';
     for (let i = 0; i < seg.w; i += 70) {
-      ctx.fillRect(sx + i, seg.y + 2, 35, 3);
+      ctx.fillRect(sx + i, seg.y + 2, 32, 3);
     }
-    // Grama
     ctx.fillStyle = '#00b894';
-    ctx.fillRect(sx, seg.y - 4, seg.w, 5);
+    ctx.fillRect(sx, seg.y - 5, seg.w, 6);
   }
   else if (seg.type === 'platform') {
     ctx.fillStyle = '#6c5ce7';
     ctx.fillRect(sx, seg.y, seg.w, seg.h);
     ctx.fillStyle = '#a29bfe';
     ctx.fillRect(sx, seg.y, seg.w, 5);
-    // Detalhe pixel
     ctx.fillStyle = '#2d3436';
-    for (let i = 8; i < seg.w; i += 16) {
+    for (let i = 6; i < seg.w; i += 14) {
       ctx.fillRect(sx + i, seg.y + 10, 4, 4);
     }
   }
   else if (seg.type === 'rampUp') {
     ctx.beginPath();
-    ctx.moveTo(sx, seg.y + 8);
-    ctx.lineTo(sx + seg.w, seg.y - seg.h + 8);
-    ctx.lineTo(sx + seg.w, seg.y + 80);
-    ctx.lineTo(sx, seg.y + 80);
+    ctx.moveTo(sx, seg.y + 6);
+    ctx.lineTo(sx + seg.w, seg.y - seg.h + 6);
+    ctx.lineTo(sx + seg.w, seg.y + 90);
+    ctx.lineTo(sx, seg.y + 90);
     ctx.closePath();
     ctx.fillStyle = '#2d3436';
     ctx.fill();
-    // Superfície
+
     ctx.beginPath();
     ctx.moveTo(sx, seg.y);
     ctx.lineTo(sx + seg.w, seg.y - seg.h);
-    ctx.lineTo(sx + seg.w, seg.y - seg.h + 8);
-    ctx.lineTo(sx, seg.y + 8);
+    ctx.lineTo(sx + seg.w, seg.y - seg.h + 7);
+    ctx.lineTo(sx, seg.y + 7);
     ctx.closePath();
     ctx.fillStyle = '#00b894';
     ctx.fill();
   }
   else if (seg.type === 'rampDown') {
     ctx.beginPath();
-    ctx.moveTo(sx, seg.y + 8);
-    ctx.lineTo(sx + seg.w, seg.y + seg.h + 8);
-    ctx.lineTo(sx + seg.w, seg.y + seg.h + 80);
-    ctx.lineTo(sx, seg.y + 80);
+    ctx.moveTo(sx, seg.y + 6);
+    ctx.lineTo(sx + seg.w, seg.y + seg.h + 6);
+    ctx.lineTo(sx + seg.w, seg.y + seg.h + 90);
+    ctx.lineTo(sx, seg.y + 90);
     ctx.closePath();
     ctx.fillStyle = '#2d3436';
     ctx.fill();
+
     ctx.beginPath();
     ctx.moveTo(sx, seg.y);
     ctx.lineTo(sx + seg.w, seg.y + seg.h);
-    ctx.lineTo(sx + seg.w, seg.y + seg.h + 8);
-    ctx.lineTo(sx, seg.y + 8);
+    ctx.lineTo(sx + seg.w, seg.y + seg.h + 7);
+    ctx.lineTo(sx, seg.y + 7);
     ctx.closePath();
     ctx.fillStyle = '#00b894';
     ctx.fill();
   }
-
-  ctx.restore();
+  else if (seg.type === 'boost') {
+    // Zona de boost (setas / brilho)
+    const pulse = 0.6 + Math.sin(Date.now() / 120) * 0.4;
+    ctx.fillStyle = `rgba(255, 200, 0, ${pulse})`;
+    ctx.fillRect(sx, seg.y, seg.w, seg.h);
+    ctx.fillStyle = '#ff9f1a';
+    ctx.fillRect(sx + 4, seg.y + 3, seg.w - 8, seg.h - 6);
+    // setas
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px Courier New';
+    ctx.fillText('>>', sx + seg.w * 0.25, seg.y + 15);
+  }
 }
 
 function drawPlayer() {
@@ -386,69 +394,68 @@ function drawPlayer() {
   const py = player.y;
 
   ctx.save();
-  ctx.translate(px + player.w * 0.4, py + player.h * 0.7);
-  ctx.rotate(player.angle);
+  ctx.translate(px + player.w * 0.38, py + player.h * 0.72);
+  ctx.rotate(player.angle); // ângulo negativo = frente sobe
 
   if (imgPlayer.complete && imgPlayer.naturalWidth > 0) {
-    ctx.drawImage(imgPlayer, -player.w * 0.4, -player.h * 0.7, player.w, player.h);
+    ctx.drawImage(imgPlayer, -player.w * 0.38, -player.h * 0.72, player.w, player.h);
   } else {
-    // Fallback pixel art da moto
+    // Fallback pixel art
     // Roda traseira
     ctx.fillStyle = '#111';
-    ctx.fillRect(-28, -6, 22, 22);
-    ctx.fillStyle = '#444';
-    ctx.fillRect(-23, -1, 12, 12);
+    ctx.fillRect(-30, -8, 24, 24);
+    ctx.fillStyle = '#555';
+    ctx.fillRect(-24, -2, 12, 12);
     // Roda dianteira
     ctx.fillStyle = '#111';
-    ctx.fillRect(22, -6, 20, 20);
-    ctx.fillStyle = '#444';
-    ctx.fillRect(26, -1, 11, 11);
+    ctx.fillRect(24, -8, 22, 22);
+    ctx.fillStyle = '#555';
+    ctx.fillRect(29, -2, 12, 12);
     // Chassis
     ctx.fillStyle = '#c0392b';
-    ctx.fillRect(-18, -18, 48, 16);
+    ctx.fillRect(-18, -20, 50, 16);
     // Tanque
     ctx.fillStyle = '#e74c3c';
-    ctx.fillRect(-5, -28, 28, 14);
+    ctx.fillRect(-6, -30, 30, 14);
     // Guidão
     ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(22, -36, 6, 22);
-    ctx.fillRect(16, -38, 18, 6);
-    // Personagem
+    ctx.fillRect(24, -38, 6, 22);
+    ctx.fillRect(18, -40, 18, 6);
+    // Corpo do piloto
     ctx.fillStyle = '#3498db';
-    ctx.fillRect(-2, -42, 16, 20);
+    ctx.fillRect(-2, -44, 16, 20);
     // Capacete
     ctx.fillStyle = '#f1c40f';
-    ctx.fillRect(0, -54, 14, 14);
+    ctx.fillRect(0, -56, 14, 14);
     ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(3, -50, 9, 5);
+    ctx.fillRect(3, -52, 9, 5);
     // Braço
     ctx.fillStyle = '#3498db';
-    ctx.fillRect(12, -36, 14, 7);
+    ctx.fillRect(12, -38, 14, 7);
   }
 
   ctx.restore();
+
+  // Efeito boost
+  if (player.boostTimer > 0) {
+    ctx.fillStyle = 'rgba(255,180,0,0.7)';
+    ctx.font = 'bold 14px Courier New';
+    ctx.fillText('BOOST!', px - 5, py - 18);
+  }
 }
 
 function draw() {
   drawBackground();
-
-  // Nível
-  for (const seg of level) {
-    drawSegment(seg);
-  }
-
-  // Player
+  for (const seg of level) drawSegment(seg);
   drawPlayer();
 
-  // Indicador de wheelie
   if (player.wheelie) {
     ctx.fillStyle = '#00ff88';
-    ctx.font = '14px Courier New';
-    ctx.fillText('WHEELIE!', player.x - camX - 10, player.y - 20);
+    ctx.font = '13px Courier New';
+    ctx.fillText('WHEELIE!', player.x - camX - 8, player.y - 22);
   }
 }
 
-// ========== LOOP ==========
 function loop() {
   update();
   draw();
