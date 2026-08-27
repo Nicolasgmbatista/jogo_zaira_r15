@@ -3,423 +3,457 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Moto Pixel Runner</title>
+<title>Moto Pixel - Ramps & Paths</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  background: #111;
+  background: #0d0d0d;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
   font-family: 'Courier New', monospace;
   overflow: hidden;
+  user-select: none;
 }
 canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border: 4px solid #333;
+  border: 4px solid #222;
   background: #1a1a2e;
   max-width: 100%;
   height: auto;
 }
 #ui {
   position: absolute;
-  top: 20px;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   color: #fff;
   text-align: center;
   pointer-events: none;
   text-shadow: 2px 2px 0 #000;
+  font-size: 18px;
 }
-#score { font-size: 24px; }
-#gameOver {
-  display: none;
+#hint {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #ff4444;
-  font-size: 32px;
-  text-align: center;
-  text-shadow: 3px 3px 0 #000;
-  pointer-events: none;
-}
-#startMsg {
-  position: absolute;
-  bottom: 40px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  color: #aaa;
-  font-size: 16px;
+  color: #888;
+  font-size: 13px;
   text-shadow: 1px 1px 0 #000;
+  pointer-events: none;
 }
 </style>
 </head>
 <body>
-<canvas id="game" width="800" height="400"></canvas>
-<div id="ui">
-  <div id="score">SCORE: 0</div>
-</div>
-<div id="gameOver">GAME OVER<br><span style="font-size:18px;color:#fff">Pressione ESPAÇO para reiniciar</span></div>
-<div id="startMsg">ESPAÇO = PULAR | Acelere e desvie dos obstáculos!</div>
+<canvas id="c" width="960" height="540"></canvas>
+<div id="ui">DISTÂNCIA: <span id="dist">0</span>m</div>
+<div id="hint">A ←  D →  |  W = EMPINAR  |  Chegue o mais longe possível</div>
 
 <script>
-const canvas = document.getElementById('game');
+const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
 const W = canvas.width;
 const H = canvas.height;
-const GROUND_Y = H - 60;
 
-// ====== IMAGENS (coloque na pasta img/) ======
-// player.png  → personagem em cima da moto (recomendado ~80x60 px)
-// obstacle.png → obstáculo (recomendado ~40x40 px)
-// bg.png       → fundo opcional (tile horizontal)
-
+// ========== IMAGENS (pasta img/) ==========
+// player.png  → moto + personagem (~96x64 px recomendado)
+// ramp.png    → opcional (tile de rampa)
 const imgPlayer = new Image();
-const imgObstacle = new Image();
-const imgBg = new Image();
-
 imgPlayer.src = 'img/player.png';
-imgObstacle.src = 'img/obstacle.png';
-imgBg.src = 'img/bg.png';
 
-let imagesLoaded = 0;
-const totalImages = 3;
-function onImgLoad() {
-  imagesLoaded++;
-  if (imagesLoaded >= totalImages) {
-    // imagens prontas (ou falharam – fallback desenhado)
-  }
-}
-imgPlayer.onload = onImgLoad;
-imgObstacle.onload = onImgLoad;
-imgBg.onload = onImgLoad;
-imgPlayer.onerror = onImgLoad;
-imgObstacle.onerror = onImgLoad;
-imgBg.onerror = onImgLoad;
+// ========== FÍSICA ==========
+const GRAVITY = 0.55;
+const MAX_SPEED = 9;
+const ACCEL = 0.28;
+const FRICTION = 0.92;
+const WHEELIE_TORQUE = 0.08;
+const WHEELIE_RETURN = 0.04;
+const MAX_WHEELIE = 1.1; // radianos (~63°)
 
-// ====== ESTADO DO JOGO ======
-let score = 0;
-let highScore = 0;
-let gameSpeed = 4;
-let isGameOver = false;
-let isStarted = false;
-let frame = 0;
-
-// Player (moto)
+// ========== PLAYER ==========
 const player = {
-  x: 100,
-  y: GROUND_Y,
-  w: 80,
-  h: 60,
+  x: 180,
+  y: 300,
+  vx: 0,
   vy: 0,
-  jumpPower: -14,
-  gravity: 0.6,
-  grounded: true,
-  rotation: 0
+  w: 90,
+  h: 58,
+  angle: 0,          // rotação da moto (wheelie)
+  grounded: false,
+  onRamp: false,
+  wheelie: false
 };
 
-// Obstáculos
-let obstacles = [];
-const obstacleTypes = [
-  { w: 36, h: 36 },
-  { w: 48, h: 28 },
-  { w: 30, h: 50 }
-];
+// ========== CÂMERA ==========
+let camX = 0;
 
-// Partículas de aceleração / poeira
-let particles = [];
+// ========== NÍVEL (plataformas + rampas) ==========
+// type: 'ground' | 'platform' | 'rampUp' | 'rampDown'
+const level = [];
 
-// Background scroll
-let bgOffset = 0;
+function buildLevel() {
+  level.length = 0;
 
-// ====== CONTROLES ======
-let keys = {};
+  // Chão inicial longo
+  level.push({ type: 'ground', x: 0, y: 420, w: 700, h: 120 });
+
+  // Rampa subindo + plataforma alta (caminho superior)
+  level.push({ type: 'rampUp', x: 700, y: 420, w: 180, h: 90 });
+  level.push({ type: 'platform', x: 880, y: 330, w: 320, h: 30 });
+  level.push({ type: 'rampDown', x: 1200, y: 330, w: 160, h: 90 });
+
+  // Caminho inferior (alternativa)
+  level.push({ type: 'ground', x: 700, y: 420, w: 900, h: 120 });
+
+  // Segunda rampa + plataforma média
+  level.push({ type: 'rampUp', x: 1600, y: 420, w: 200, h: 110 });
+  level.push({ type: 'platform', x: 1800, y: 310, w: 280, h: 28 });
+  level.push({ type: 'rampDown', x: 2080, y: 310, w: 150, h: 110 });
+
+  // Chão intermediário
+  level.push({ type: 'ground', x: 1600, y: 420, w: 800, h: 120 });
+
+  // Plataforma alta isolada (pulo com wheelie ajuda)
+  level.push({ type: 'platform', x: 2450, y: 260, w: 200, h: 26 });
+
+  // Rampa grande final
+  level.push({ type: 'rampUp', x: 2700, y: 420, w: 280, h: 160 });
+  level.push({ type: 'platform', x: 2980, y: 260, w: 400, h: 30 });
+  level.push({ type: 'rampDown', x: 3380, y: 260, w: 200, h: 160 });
+
+  // Chão contínuo
+  level.push({ type: 'ground', x: 2700, y: 420, w: 1200, h: 120 });
+
+  // Mais caminhos alternativos
+  level.push({ type: 'platform', x: 3600, y: 340, w: 180, h: 24 });
+  level.push({ type: 'platform', x: 3850, y: 280, w: 160, h: 24 });
+  level.push({ type: 'platform', x: 4100, y: 220, w: 220, h: 24 });
+
+  // Rampa final + chão infinito-ish
+  level.push({ type: 'rampUp', x: 4400, y: 420, w: 220, h: 130 });
+  level.push({ type: 'platform', x: 4620, y: 290, w: 350, h: 28 });
+  level.push({ type: 'ground', x: 4400, y: 420, w: 2000, h: 120 });
+}
+
+buildLevel();
+
+// ========== INPUT ==========
+const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'Space') {
-    e.preventDefault();
-    if (isGameOver) {
-      resetGame();
-    } else if (!isStarted) {
-      isStarted = true;
-      document.getElementById('startMsg').style.display = 'none';
-    } else {
-      jump();
-    }
-  }
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', e => {
   keys[e.code] = false;
 });
 
-// Toque / clique
-canvas.addEventListener('pointerdown', () => {
-  if (isGameOver) {
-    resetGame();
-  } else if (!isStarted) {
-    isStarted = true;
-    document.getElementById('startMsg').style.display = 'none';
-  } else {
-    jump();
+// ========== HELPERS DE COLISÃO ==========
+function getSegmentY(seg, px) {
+  // Retorna a altura do topo do segmento em px
+  if (seg.type === 'ground' || seg.type === 'platform') {
+    return seg.y;
   }
-});
+  if (seg.type === 'rampUp') {
+    const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
+    return seg.y - t * seg.h;
+  }
+  if (seg.type === 'rampDown') {
+    const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
+    return seg.y + t * seg.h;
+  }
+  return seg.y;
+}
 
-function jump() {
-  if (player.grounded && !isGameOver) {
-    player.vy = player.jumpPower;
-    player.grounded = false;
-    // partículas de salto
-    for (let i = 0; i < 6; i++) {
-      particles.push({
-        x: player.x + 20,
-        y: player.y + player.h,
-        vx: Math.random() * 2 - 1,
-        vy: Math.random() * -2,
-        life: 20,
-        color: '#888'
-      });
+function getSegmentSlope(seg) {
+  if (seg.type === 'rampUp') return -seg.h / seg.w;
+  if (seg.type === 'rampDown') return seg.h / seg.w;
+  return 0;
+}
+
+// ========== UPDATE ==========
+function update() {
+  // Aceleração
+  if (keys['KeyD'] || keys['ArrowRight']) {
+    player.vx += ACCEL;
+  }
+  if (keys['KeyA'] || keys['ArrowLeft']) {
+    player.vx -= ACCEL;
+  }
+
+  // Limites de velocidade
+  player.vx = Math.max(-MAX_SPEED * 0.7, Math.min(MAX_SPEED, player.vx));
+
+  // Fricção no chão
+  if (player.grounded) {
+    player.vx *= FRICTION;
+  } else {
+    player.vx *= 0.995;
+  }
+
+  // Wheelie (W)
+  if (keys['KeyW'] || keys['ArrowUp']) {
+    if (player.grounded || player.onRamp) {
+      player.angle += WHEELIE_TORQUE;
+      player.wheelie = true;
+    }
+  } else {
+    player.wheelie = false;
+    // Retorna ao ângulo do chão
+    if (player.grounded || player.onRamp) {
+      player.angle *= (1 - WHEELIE_RETURN * 2);
+    } else {
+      // No ar o ângulo tende a estabilizar
+      player.angle *= 0.98;
     }
   }
-}
+  player.angle = Math.max(-0.15, Math.min(MAX_WHEELIE, player.angle));
 
-function resetGame() {
-  score = 0;
-  gameSpeed = 4;
-  isGameOver = false;
-  isStarted = true;
-  obstacles = [];
-  particles = [];
-  player.y = GROUND_Y;
-  player.vy = 0;
-  player.grounded = true;
-  player.rotation = 0;
-  document.getElementById('gameOver').style.display = 'none';
-  document.getElementById('score').textContent = 'SCORE: 0';
-}
+  // Gravidade
+  player.vy += GRAVITY;
 
-// ====== SPAWN DE OBSTÁCULOS ======
-function spawnObstacle() {
-  const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
-  obstacles.push({
-    x: W + 20,
-    y: GROUND_Y + 10 - type.h,
-    w: type.w,
-    h: type.h,
-    passed: false
-  });
-}
-
-// ====== UPDATE ======
-function update() {
-  if (!isStarted || isGameOver) return;
-
-  frame++;
-  score += 0.1 * (gameSpeed / 4);
-  document.getElementById('score').textContent = 'SCORE: ' + Math.floor(score);
-
-  // Aceleração gradual
-  if (frame % 120 === 0) {
-    gameSpeed = Math.min(gameSpeed + 0.3, 14);
-  }
-
-  // Física do player
-  player.vy += player.gravity;
+  // Movimento
+  player.x += player.vx;
   player.y += player.vy;
 
-  if (player.y >= GROUND_Y) {
-    player.y = GROUND_Y;
+  // Colisão com o nível
+  player.grounded = false;
+  player.onRamp = false;
+
+  const feetX = player.x + player.w * 0.5;
+  const feetY = player.y + player.h;
+
+  for (const seg of level) {
+    if (feetX < seg.x - 10 || feetX > seg.x + seg.w + 10) continue;
+
+    const surfaceY = getSegmentY(seg, feetX);
+    const slope = getSegmentSlope(seg);
+
+    // Só colide se estiver caindo ou quase no chão
+    if (player.vy >= -1 && feetY >= surfaceY - 8 && feetY <= surfaceY + 18) {
+      player.y = surfaceY - player.h;
+      player.vy = 0;
+      player.grounded = true;
+
+      if (seg.type === 'rampUp' || seg.type === 'rampDown') {
+        player.onRamp = true;
+        // Ajusta ângulo base da rampa
+        const rampAngle = Math.atan(slope);
+        if (!player.wheelie) {
+          player.angle = player.angle * 0.7 + rampAngle * 0.3;
+        }
+      } else {
+        if (!player.wheelie) {
+          player.angle *= 0.85;
+        }
+      }
+      break;
+    }
+  }
+
+  // Morte se cair muito
+  if (player.y > H + 200) {
+    // Respawn no início
+    player.x = 180;
+    player.y = 300;
+    player.vx = 0;
     player.vy = 0;
-    player.grounded = true;
-    player.rotation = 0;
+    player.angle = 0;
+    camX = 0;
+  }
+
+  // Câmera segue o player
+  const targetCam = player.x - W * 0.35;
+  camX += (targetCam - camX) * 0.12;
+  if (camX < 0) camX = 0;
+
+  // Distância
+  document.getElementById('dist').textContent = Math.max(0, Math.floor((player.x - 180) / 10));
+}
+
+// ========== DRAW ==========
+function drawBackground() {
+  // Céu
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0f0c29');
+  grad.addColorStop(0.5, '#302b63');
+  grad.addColorStop(1, '#24243e');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Estrelas
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 60; i++) {
+    const sx = ((i * 137 + camX * 0.15) % (W + 40)) - 20;
+    const sy = (i * 97) % (H * 0.55);
+    ctx.globalAlpha = 0.4 + (i % 3) * 0.2;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  // Montanhas distantes
+  ctx.fillStyle = '#1a1a2e';
+  for (let i = 0; i < 8; i++) {
+    const mx = ((i * 220) - camX * 0.3) % (W + 300) - 100;
+    ctx.beginPath();
+    ctx.moveTo(mx, H);
+    ctx.lineTo(mx + 110, H - 90 - (i % 3) * 30);
+    ctx.lineTo(mx + 220, H);
+    ctx.fill();
+  }
+}
+
+function drawSegment(seg) {
+  const sx = seg.x - camX;
+  if (sx + seg.w < -50 || sx > W + 50) return;
+
+  ctx.save();
+
+  if (seg.type === 'ground') {
+    // Chão
+    ctx.fillStyle = '#2d3436';
+    ctx.fillRect(sx, seg.y, seg.w, seg.h);
+    // Faixa
+    ctx.fillStyle = '#636e72';
+    ctx.fillRect(sx, seg.y, seg.w, 6);
+    // Marcas
+    ctx.fillStyle = '#b2bec3';
+    for (let i = 0; i < seg.w; i += 70) {
+      ctx.fillRect(sx + i, seg.y + 2, 35, 3);
+    }
+    // Grama
+    ctx.fillStyle = '#00b894';
+    ctx.fillRect(sx, seg.y - 4, seg.w, 5);
+  }
+  else if (seg.type === 'platform') {
+    ctx.fillStyle = '#6c5ce7';
+    ctx.fillRect(sx, seg.y, seg.w, seg.h);
+    ctx.fillStyle = '#a29bfe';
+    ctx.fillRect(sx, seg.y, seg.w, 5);
+    // Detalhe pixel
+    ctx.fillStyle = '#2d3436';
+    for (let i = 8; i < seg.w; i += 16) {
+      ctx.fillRect(sx + i, seg.y + 10, 4, 4);
+    }
+  }
+  else if (seg.type === 'rampUp') {
+    ctx.beginPath();
+    ctx.moveTo(sx, seg.y + 8);
+    ctx.lineTo(sx + seg.w, seg.y - seg.h + 8);
+    ctx.lineTo(sx + seg.w, seg.y + 80);
+    ctx.lineTo(sx, seg.y + 80);
+    ctx.closePath();
+    ctx.fillStyle = '#2d3436';
+    ctx.fill();
+    // Superfície
+    ctx.beginPath();
+    ctx.moveTo(sx, seg.y);
+    ctx.lineTo(sx + seg.w, seg.y - seg.h);
+    ctx.lineTo(sx + seg.w, seg.y - seg.h + 8);
+    ctx.lineTo(sx, seg.y + 8);
+    ctx.closePath();
+    ctx.fillStyle = '#00b894';
+    ctx.fill();
+  }
+  else if (seg.type === 'rampDown') {
+    ctx.beginPath();
+    ctx.moveTo(sx, seg.y + 8);
+    ctx.lineTo(sx + seg.w, seg.y + seg.h + 8);
+    ctx.lineTo(sx + seg.w, seg.y + seg.h + 80);
+    ctx.lineTo(sx, seg.y + 80);
+    ctx.closePath();
+    ctx.fillStyle = '#2d3436';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sx, seg.y);
+    ctx.lineTo(sx + seg.w, seg.y + seg.h);
+    ctx.lineTo(sx + seg.w, seg.y + seg.h + 8);
+    ctx.lineTo(sx, seg.y + 8);
+    ctx.closePath();
+    ctx.fillStyle = '#00b894';
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawPlayer() {
+  const px = player.x - camX;
+  const py = player.y;
+
+  ctx.save();
+  ctx.translate(px + player.w * 0.4, py + player.h * 0.7);
+  ctx.rotate(player.angle);
+
+  if (imgPlayer.complete && imgPlayer.naturalWidth > 0) {
+    ctx.drawImage(imgPlayer, -player.w * 0.4, -player.h * 0.7, player.w, player.h);
   } else {
-    player.grounded = false;
-    player.rotation = Math.min(player.vy * 2, 25);
+    // Fallback pixel art da moto
+    // Roda traseira
+    ctx.fillStyle = '#111';
+    ctx.fillRect(-28, -6, 22, 22);
+    ctx.fillStyle = '#444';
+    ctx.fillRect(-23, -1, 12, 12);
+    // Roda dianteira
+    ctx.fillStyle = '#111';
+    ctx.fillRect(22, -6, 20, 20);
+    ctx.fillStyle = '#444';
+    ctx.fillRect(26, -1, 11, 11);
+    // Chassis
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(-18, -18, 48, 16);
+    // Tanque
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(-5, -28, 28, 14);
+    // Guidão
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillRect(22, -36, 6, 22);
+    ctx.fillRect(16, -38, 18, 6);
+    // Personagem
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(-2, -42, 16, 20);
+    // Capacete
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(0, -54, 14, 14);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillRect(3, -50, 9, 5);
+    // Braço
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(12, -36, 14, 7);
   }
 
-  // Scroll do fundo
-  bgOffset = (bgOffset + gameSpeed * 0.5) % W;
-
-  // Partículas de motor / poeira no chão
-  if (player.grounded && frame % 3 === 0) {
-    particles.push({
-      x: player.x + 10,
-      y: player.y + player.h - 5,
-      vx: -gameSpeed * 0.5 - Math.random() * 2,
-      vy: -Math.random() * 1.5,
-      life: 15 + Math.random() * 10,
-      color: Math.random() > 0.5 ? '#555' : '#777'
-    });
-  }
-
-  // Atualiza partículas
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life--;
-    if (p.life <= 0) particles.splice(i, 1);
-  }
-
-  // Spawn obstáculos
-  if (frame % Math.max(40, 90 - Math.floor(gameSpeed * 4)) === 0) {
-    spawnObstacle();
-  }
-
-  // Move e verifica obstáculos
-  for (let i = obstacles.length - 1; i >= 0; i--) {
-    const o = obstacles[i];
-    o.x -= gameSpeed;
-
-    // Colisão (hitbox reduzida um pouco para pixel art)
-    const px = player.x + 15;
-    const py = player.y + 10;
-    const pw = player.w - 30;
-    const ph = player.h - 15;
-
-    if (px < o.x + o.w &&
-        px + pw > o.x &&
-        py < o.y + o.h &&
-        py + ph > o.y) {
-      isGameOver = true;
-      highScore = Math.max(highScore, Math.floor(score));
-      document.getElementById('gameOver').style.display = 'block';
-      document.getElementById('gameOver').innerHTML =
-        'GAME OVER<br><span style="font-size:18px;color:#fff">Score: ' + Math.floor(score) +
-        ' | Recorde: ' + highScore + '<br>Pressione ESPAÇO para reiniciar</span>';
-    }
-
-    // Remove fora da tela
-    if (o.x + o.w < 0) {
-      obstacles.splice(i, 1);
-    }
-  }
-}
-
-// ====== DRAW ======
-function drawPixelRect(x, y, w, h, color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
-}
-
-function drawFallbackPlayer(x, y) {
-  // Moto + personagem pixel art simples
-  // Corpo da moto
-  drawPixelRect(x + 10, y + 35, 55, 12, '#222');
-  drawPixelRect(x + 5, y + 40, 20, 8, '#111');   // roda traseira
-  drawPixelRect(x + 55, y + 40, 18, 8, '#111');  // roda dianteira
-  // Detalhes da moto
-  drawPixelRect(x + 25, y + 28, 30, 10, '#c41e3a'); // tanque vermelho
-  drawPixelRect(x + 50, y + 20, 8, 18, '#333');     // guidão
-  // Personagem
-  drawPixelRect(x + 30, y + 10, 18, 20, '#4a90d9'); // corpo
-  drawPixelRect(x + 32, y + 2, 14, 12, '#f5c542');  // capacete
-  drawPixelRect(x + 34, y + 6, 10, 4, '#222');      // viseira
-  // Braço
-  drawPixelRect(x + 45, y + 15, 12, 6, '#4a90d9');
-}
-
-function drawFallbackObstacle(x, y, w, h) {
-  // Caixa de obstáculo pixel
-  drawPixelRect(x, y, w, h, '#8b4513');
-  drawPixelRect(x + 4, y + 4, w - 8, h - 8, '#a0522d');
-  // X de perigo
-  ctx.strokeStyle = '#ff0';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + 6, y + 6);
-  ctx.lineTo(x + w - 6, y + h - 6);
-  ctx.moveTo(x + w - 6, y + 6);
-  ctx.lineTo(x + 6, y + h - 6);
-  ctx.stroke();
+  ctx.restore();
 }
 
 function draw() {
-  // Fundo
-  if (imgBg.complete && imgBg.naturalWidth > 0) {
-    // Tile do fundo
-    const bgW = imgBg.width;
-    const scale = H / imgBg.height;
-    const scaledW = bgW * scale;
-    let ox = - (bgOffset % scaledW);
-    while (ox < W) {
-      ctx.drawImage(imgBg, ox, 0, scaledW, H);
-      ox += scaledW;
-    }
-  } else {
-    // Fallback céu + chão
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, W, H);
-    // Estrelas
-    ctx.fillStyle = '#fff';
-    for (let i = 0; i < 30; i++) {
-      const sx = (i * 73 + bgOffset * 0.2) % W;
-      const sy = (i * 37) % (H - 80);
-      ctx.fillRect(sx, sy, 2, 2);
-    }
+  drawBackground();
+
+  // Nível
+  for (const seg of level) {
+    drawSegment(seg);
   }
-
-  // Chão
-  ctx.fillStyle = '#2d3436';
-  ctx.fillRect(0, GROUND_Y + 50, W, H - GROUND_Y);
-  // Linha da pista
-  ctx.fillStyle = '#636e72';
-  ctx.fillRect(0, GROUND_Y + 48, W, 4);
-  // Marcas da pista
-  ctx.fillStyle = '#dfe6e9';
-  for (let i = 0; i < 12; i++) {
-    const mx = ((i * 80) - (bgOffset * 2) % 80);
-    ctx.fillRect(mx, GROUND_Y + 55, 40, 4);
-  }
-
-  // Partículas
-  particles.forEach(p => {
-    ctx.globalAlpha = p.life / 25;
-    ctx.fillStyle = p.color;
-    ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 3, 3);
-  });
-  ctx.globalAlpha = 1;
-
-  // Obstáculos
-  obstacles.forEach(o => {
-    if (imgObstacle.complete && imgObstacle.naturalWidth > 0) {
-      ctx.drawImage(imgObstacle, Math.floor(o.x), Math.floor(o.y), o.w, o.h);
-    } else {
-      drawFallbackObstacle(o.x, o.y, o.w, o.h);
-    }
-  });
 
   // Player
-  ctx.save();
-  ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
-  ctx.rotate(player.rotation * Math.PI / 180);
-  if (imgPlayer.complete && imgPlayer.naturalWidth > 0) {
-    ctx.drawImage(imgPlayer, -player.w / 2, -player.h / 2, player.w, player.h);
-  } else {
-    drawFallbackPlayer(-player.w / 2, -player.h / 2);
-  }
-  ctx.restore();
+  drawPlayer();
 
-  // Velocímetro visual
-  if (isStarted && !isGameOver) {
+  // Indicador de wheelie
+  if (player.wheelie) {
     ctx.fillStyle = '#00ff88';
-    ctx.font = '12px Courier New';
-    ctx.fillText('SPD ' + Math.floor(gameSpeed * 10), 10, 20);
+    ctx.font = '14px Courier New';
+    ctx.fillText('WHEELIE!', player.x - camX - 10, player.y - 20);
   }
 }
 
-// ====== LOOP ======
+// ========== LOOP ==========
 function loop() {
   update();
   draw();
   requestAnimationFrame(loop);
 }
-
-// Inicia
 loop();
 </script>
 </body>
