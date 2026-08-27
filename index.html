@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Moto Pixel - Ramps & Boost</title>
+<title>Moto Pixel - Gatinhos</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -26,31 +26,99 @@ canvas {
 }
 #ui {
   position: absolute;
-  top: 12px;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
   color: #fff;
   text-align: center;
   pointer-events: none;
   text-shadow: 2px 2px 0 #000;
-  font-size: 18px;
+  font-size: 16px;
+  line-height: 1.4;
 }
 #hint {
   position: absolute;
-  bottom: 16px;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   color: #888;
-  font-size: 13px;
+  font-size: 12px;
   text-shadow: 1px 1px 0 #000;
   pointer-events: none;
 }
+#menu {
+  display: none;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  z-index: 10;
+}
+#menu.open { display: flex; }
+#menu h2 {
+  color: #ff9ff3;
+  font-size: 28px;
+  margin-bottom: 16px;
+  text-shadow: 2px 2px 0 #000;
+}
+#collection {
+  display: grid;
+  grid-template-columns: repeat(5, 72px);
+  gap: 12px;
+  max-width: 420px;
+  margin-bottom: 20px;
+}
+.cat-slot {
+  width: 72px;
+  height: 72px;
+  background: #2d3436;
+  border: 3px solid #636e72;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  image-rendering: pixelated;
+}
+.cat-slot.got {
+  border-color: #ff9ff3;
+  background: #3d2a3d;
+}
+#menu p {
+  color: #ccc;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+#closeBtn {
+  margin-top: 12px;
+  padding: 8px 24px;
+  background: #6c5ce7;
+  color: #fff;
+  border: none;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  border: 2px solid #a29bfe;
+}
+#closeBtn:hover { background: #a29bfe; color: #000; }
 </style>
 </head>
 <body>
 <canvas id="c" width="960" height="540"></canvas>
-<div id="ui">DISTÂNCIA: <span id="dist">0</span>m</div>
-<div id="hint">A ←  D →  |  W = EMPINAR (para cima)  |  Use as rampas com BOOST para voar sobre os buracos</div>
+<div id="ui">
+  DISTÂNCIA: <span id="dist">0</span>m<br>
+  GATINHOS: <span id="cats">0</span> / <span id="totalCats">0</span>
+  &nbsp;|&nbsp; [M] Coleção
+</div>
+<div id="hint">A ←  D →  |  W = EMPINAR  |  Pegue os gatinhos  |  Rampas com BOOST voam sobre buracos</div>
+
+<div id="menu">
+  <h2>Coleção de Gatinhos</h2>
+  <p id="menuCount">0 / 0 coletados</p>
+  <div id="collection"></div>
+  <button id="closeBtn">Fechar (M ou ESC)</button>
+</div>
 
 <script>
 const canvas = document.getElementById('c');
@@ -60,18 +128,26 @@ ctx.imageSmoothingEnabled = false;
 const W = canvas.width;
 const H = canvas.height;
 
-// ========== IMAGENS (pasta img/) ==========
+// ========== IMAGENS ==========
 const imgPlayer = new Image();
 imgPlayer.src = 'img/player.png';
 
+// Gatinhos (opcional: img/cat1.png, cat2.png ...)
+const catImgs = [];
+for (let i = 1; i <= 12; i++) {
+  const im = new Image();
+  im.src = `img/cat${i}.png`;
+  catImgs.push(im);
+}
+
 // ========== FÍSICA ==========
-const GRAVITY = 0.52;
-const MAX_SPEED = 10;
-const ACCEL = 0.32;
-const FRICTION = 0.93;
-const WHEELIE_TORQUE = 0.09;
+const GRAVITY = 0.48;
+const MAX_SPEED = 9.5;
+const ACCEL = 0.30;
+const FRICTION = 0.935;
+const WHEELIE_TORQUE = 0.085;
 const WHEELIE_RETURN = 0.05;
-const MAX_WHEELIE = 1.15; // radianos (~66°)
+const MAX_WHEELIE = 1.1;
 
 // ========== PLAYER ==========
 const player = {
@@ -88,63 +164,103 @@ const player = {
   boostTimer: 0
 };
 
-// ========== CÂMERA ==========
 let camX = 0;
+let menuOpen = false;
 
 // ========== NÍVEL ==========
-// type: 'ground' | 'platform' | 'rampUp' | 'rampDown' | 'boost'
 const level = [];
+const cats = []; // collectibles
 
 function buildLevel() {
   level.length = 0;
+  cats.length = 0;
 
-  // === INÍCIO ===
-  level.push({ type: 'ground', x: 0, y: 420, w: 600, h: 130 });
+  // Início
+  level.push({ type: 'ground', x: 0, y: 420, w: 580, h: 130 });
 
-  // Rampa + plataforma alta (caminho alternativo)
-  level.push({ type: 'rampUp', x: 600, y: 420, w: 160, h: 100 });
-  level.push({ type: 'platform', x: 760, y: 320, w: 280, h: 28 });
-  level.push({ type: 'rampDown', x: 1040, y: 320, w: 140, h: 100 });
+  // Rampa + plataforma alta
+  level.push({ type: 'rampUp', x: 580, y: 420, w: 160, h: 100 });
+  level.push({ type: 'platform', x: 740, y: 320, w: 260, h: 28 });
+  level.push({ type: 'rampDown', x: 1000, y: 320, w: 140, h: 100 });
+  level.push({ type: 'ground', x: 580, y: 420, w: 700, h: 130 });
 
-  // Chão inferior paralelo
-  level.push({ type: 'ground', x: 600, y: 420, w: 700, h: 130 });
+  // 1º BURACO + BOOST
+  level.push({ type: 'rampUp', x: 1280, y: 420, w: 210, h: 135 });
+  level.push({ type: 'boost',  x: 1390, y: 295, w: 95, h: 18 });
+  level.push({ type: 'ground', x: 1720, y: 420, w: 480, h: 130 });
+  level.push({ type: 'platform', x: 1520, y: 255, w: 160, h: 24 });
 
-  // === PRIMEIRO BURACO (com rampa + BOOST) ===
-  level.push({ type: 'rampUp', x: 1300, y: 420, w: 200, h: 130 });
-  level.push({ type: 'boost',  x: 1400, y: 300, w: 90,  h: 20 }); // zona de boost
-  // buraco de ~220px
-  level.push({ type: 'ground', x: 1720, y: 420, w: 500, h: 130 });
+  // 2º BURACO
+  level.push({ type: 'rampUp', x: 2200, y: 420, w: 240, h: 155 });
+  level.push({ type: 'boost',  x: 2330, y: 275, w: 100, h: 18 });
+  level.push({ type: 'ground', x: 2740, y: 420, w: 420, h: 130 });
+  level.push({ type: 'platform', x: 2520, y: 295, w: 130, h: 22 });
+  level.push({ type: 'platform', x: 2880, y: 340, w: 150, h: 22 });
 
-  // Caminho alto alternativo
-  level.push({ type: 'platform', x: 1550, y: 260, w: 180, h: 24 });
+  // 3º BURACO + caminho alto
+  level.push({ type: 'rampUp', x: 3160, y: 420, w: 190, h: 125 });
+  level.push({ type: 'boost',  x: 3260, y: 305, w: 85, h: 18 });
+  level.push({ type: 'platform', x: 3480, y: 275, w: 220, h: 26 });
+  level.push({ type: 'rampDown', x: 3700, y: 275, w: 160, h: 145 });
+  level.push({ type: 'ground', x: 3860, y: 420, w: 580, h: 130 });
 
-  // === SEGUNDO BURACO (maior) ===
-  level.push({ type: 'rampUp', x: 2220, y: 420, w: 240, h: 150 });
-  level.push({ type: 'boost',  x: 2350, y: 280, w: 100, h: 20 });
-  // buraco de ~280px
-  level.push({ type: 'ground', x: 2740, y: 420, w: 450, h: 130 });
+  // 4º BURACO
+  level.push({ type: 'rampUp', x: 4440, y: 420, w: 260, h: 165 });
+  level.push({ type: 'boost',  x: 4580, y: 265, w: 110, h: 20 });
+  level.push({ type: 'ground', x: 5020, y: 420, w: 900, h: 130 });
+  level.push({ type: 'platform', x: 4860, y: 295, w: 120, h: 22 });
+  level.push({ type: 'platform', x: 5160, y: 245, w: 170, h: 24 });
+  level.push({ type: 'platform', x: 5420, y: 315, w: 140, h: 22 });
 
-  // Plataformas intermediárias
-  level.push({ type: 'platform', x: 2550, y: 300, w: 140, h: 22 });
-  level.push({ type: 'platform', x: 2900, y: 340, w: 160, h: 22 });
+  // === GATINHOS (tokens) ===
+  const catPositions = [
+    { x: 350,  y: 380 },
+    { x: 820,  y: 280 },
+    { x: 1100, y: 380 },
+    { x: 1480, y: 220 },
+    { x: 1900, y: 380 },
+    { x: 2450, y: 240 },
+    { x: 2650, y: 380 },
+    { x: 3000, y: 300 },
+    { x: 3550, y: 235 },
+    { x: 4000, y: 380 },
+    { x: 4700, y: 220 },
+    { x: 5300, y: 205 }
+  ];
 
-  // === TERCEIRO BURACO + caminho alto ===
-  level.push({ type: 'rampUp', x: 3190, y: 420, w: 180, h: 120 });
-  level.push({ type: 'boost',  x: 3280, y: 310, w: 80,  h: 18 });
-  level.push({ type: 'platform', x: 3500, y: 280, w: 220, h: 26 });
-  level.push({ type: 'rampDown', x: 3720, y: 280, w: 160, h: 140 });
-  level.push({ type: 'ground', x: 3880, y: 420, w: 600, h: 130 });
+  catPositions.forEach((p, i) => {
+    cats.push({
+      x: p.x,
+      y: p.y,
+      w: 36,
+      h: 36,
+      id: i,
+      collected: false,
+      bob: Math.random() * Math.PI * 2
+    });
+  });
 
-  // === QUARTO BURACO (desafio final) ===
-  level.push({ type: 'rampUp', x: 4480, y: 420, w: 260, h: 160 });
-  level.push({ type: 'boost',  x: 4620, y: 270, w: 110, h: 22 });
-  // buraco grande
-  level.push({ type: 'ground', x: 5050, y: 420, w: 800, h: 130 });
+  document.getElementById('totalCats').textContent = cats.length;
+  buildCollectionUI();
+}
 
-  // Plataformas extras no final
-  level.push({ type: 'platform', x: 4900, y: 300, w: 120, h: 22 });
-  level.push({ type: 'platform', x: 5200, y: 250, w: 180, h: 24 });
-  level.push({ type: 'platform', x: 5450, y: 320, w: 150, h: 22 });
+function buildCollectionUI() {
+  const box = document.getElementById('collection');
+  box.innerHTML = '';
+  cats.forEach((c, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'cat-slot' + (c.collected ? ' got' : '');
+    slot.id = 'slot' + i;
+    slot.textContent = c.collected ? '🐱' : '?';
+    box.appendChild(slot);
+  });
+  updateMenuCount();
+}
+
+function updateMenuCount() {
+  const got = cats.filter(c => c.collected).length;
+  document.getElementById('menuCount').textContent = `${got} / ${cats.length} coletados`;
+  document.getElementById('cats').textContent = got;
 }
 
 buildLevel();
@@ -154,16 +270,24 @@ const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+
+  if (e.code === 'KeyM' || e.code === 'Escape') {
+    toggleMenu();
+  }
 });
-window.addEventListener('keyup', e => {
-  keys[e.code] = false;
-});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+document.getElementById('closeBtn').onclick = () => toggleMenu(false);
+
+function toggleMenu(force) {
+  menuOpen = force !== undefined ? force : !menuOpen;
+  document.getElementById('menu').classList.toggle('open', menuOpen);
+}
 
 // ========== HELPERS ==========
 function getSegmentY(seg, px) {
-  if (seg.type === 'ground' || seg.type === 'platform' || seg.type === 'boost') {
-    return seg.y;
-  }
+  if (seg.type === 'ground' || seg.type === 'platform') return seg.y;
+  if (seg.type === 'boost') return seg.y;
   if (seg.type === 'rampUp') {
     const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
     return seg.y - t * seg.h;
@@ -183,87 +307,118 @@ function getSegmentSlope(seg) {
 
 // ========== UPDATE ==========
 function update() {
-  // Movimento horizontal
+  if (menuOpen) return;
+
+  // Movimento
   if (keys['KeyD'] || keys['ArrowRight']) player.vx += ACCEL;
   if (keys['KeyA'] || keys['ArrowLeft'])  player.vx -= ACCEL;
 
-  player.vx = Math.max(-MAX_SPEED * 0.65, Math.min(MAX_SPEED, player.vx));
-
+  player.vx = Math.max(-MAX_SPEED * 0.6, Math.min(MAX_SPEED, player.vx));
   if (player.grounded) player.vx *= FRICTION;
   else player.vx *= 0.997;
 
-  // === WHEELIE PARA CIMA (ângulo negativo = frente sobe) ===
+  // Wheelie para cima (ângulo negativo)
   if (keys['KeyW'] || keys['ArrowUp']) {
     if (player.grounded || player.onRamp) {
-      player.angle -= WHEELIE_TORQUE; // negativo = empina para cima
+      player.angle -= WHEELIE_TORQUE;
       player.wheelie = true;
     }
   } else {
     player.wheelie = false;
     if (player.grounded || player.onRamp) {
-      // volta ao ângulo do chão/rampa
       player.angle *= (1 - WHEELIE_RETURN * 2.2);
     } else {
       player.angle *= 0.97;
     }
   }
-  // Limites: 0 = plano, -MAX_WHEELIE = empina máximo para cima
-  player.angle = Math.max(-MAX_WHEELIE, Math.min(0.2, player.angle));
+  player.angle = Math.max(-MAX_WHEELIE, Math.min(0.18, player.angle));
 
-  // Boost timer
+  // Boost (só velocidade horizontal extra, sem forçar vy negativa residual)
   if (player.boostTimer > 0) {
     player.boostTimer--;
-    player.vx = Math.min(player.vx + 0.45, MAX_SPEED + 4);
+    player.vx = Math.min(player.vx + 0.55, MAX_SPEED + 5);
   }
 
   // Gravidade
   player.vy += GRAVITY;
+  if (player.vy > 16) player.vy = 16;
 
   // Movimento
   player.x += player.vx;
   player.y += player.vy;
 
-  // Colisão
+  // ===== COLISÃO ROBUSTA =====
   player.grounded = false;
   player.onRamp = false;
 
-  const feetX = player.x + player.w * 0.45;
-  const feetY = player.y + player.h;
+  const feetX = player.x + player.w * 0.42;
+  let feetY = player.y + player.h;
+
+  // Ordena segmentos sob o player e pega o mais alto (topo)
+  let bestY = null;
+  let bestSeg = null;
 
   for (const seg of level) {
-    if (feetX < seg.x - 12 || feetX > seg.x + seg.w + 12) continue;
-
+    if (feetX < seg.x - 8 || feetX > seg.x + seg.w + 8) continue;
     const surfaceY = getSegmentY(seg, feetX);
-    const slope = getSegmentSlope(seg);
 
-    if (player.vy >= -1.5 && feetY >= surfaceY - 10 && feetY <= surfaceY + 20) {
-      player.y = surfaceY - player.h;
-      player.vy = 0;
-      player.grounded = true;
-
-      // BOOST
-      if (seg.type === 'boost') {
-        player.boostTimer = 28;
-        // impulsão vertical extra
-        player.vy = -6.5;
-        player.grounded = false;
+    // Só considera se o pé está perto ou acima da superfície
+    if (feetY >= surfaceY - 14 && player.y + player.h * 0.4 < surfaceY + 30) {
+      if (bestY === null || surfaceY < bestY) {
+        bestY = surfaceY;
+        bestSeg = seg;
       }
-
-      if (seg.type === 'rampUp' || seg.type === 'rampDown') {
-        player.onRamp = true;
-        const rampAngle = Math.atan(slope);
-        if (!player.wheelie) {
-          player.angle = player.angle * 0.65 + rampAngle * 0.35;
-        }
-      } else if (seg.type !== 'boost') {
-        if (!player.wheelie) player.angle *= 0.82;
-      }
-      break;
     }
   }
 
-  // Queda = respawn
-  if (player.y > H + 180) {
+  if (bestSeg && bestY !== null) {
+    // Se está caindo ou já está em cima
+    if (player.vy >= -2 || feetY >= bestY - 6) {
+      // Snap para o chão
+      player.y = bestY - player.h;
+      player.vy = 0;
+      player.grounded = true;
+
+      if (bestSeg.type === 'boost') {
+        // Boost seguro: impulsão controlada + timer
+        if (player.boostTimer <= 0) {
+          player.boostTimer = 32;
+          player.vy = -7.2; // impulsão limpa
+          player.grounded = false;
+        }
+      } else if (bestSeg.type === 'rampUp' || bestSeg.type === 'rampDown') {
+        player.onRamp = true;
+        const slope = getSegmentSlope(bestSeg);
+        const rampAngle = Math.atan(slope);
+        if (!player.wheelie) {
+          player.angle = player.angle * 0.6 + rampAngle * 0.4;
+        }
+      } else {
+        if (!player.wheelie) player.angle *= 0.8;
+      }
+    }
+  }
+
+  // Coletar gatinhos
+  for (const cat of cats) {
+    if (cat.collected) continue;
+    const cx = cat.x + cat.w / 2;
+    const cy = cat.y + cat.h / 2 + Math.sin(Date.now() / 200 + cat.bob) * 6;
+    const px = player.x + player.w / 2;
+    const py = player.y + player.h / 2;
+    if (Math.abs(px - cx) < 40 && Math.abs(py - cy) < 40) {
+      cat.collected = true;
+      updateMenuCount();
+      const slot = document.getElementById('slot' + cat.id);
+      if (slot) {
+        slot.classList.add('got');
+        slot.textContent = '🐱';
+      }
+    }
+  }
+
+  // Queda
+  if (player.y > H + 200) {
     player.x = 160;
     player.y = 300;
     player.vx = 0;
@@ -274,8 +429,8 @@ function update() {
   }
 
   // Câmera
-  const targetCam = player.x - W * 0.32;
-  camX += (targetCam - camX) * 0.14;
+  const targetCam = player.x - W * 0.30;
+  camX += (targetCam - camX) * 0.13;
   if (camX < 0) camX = 0;
 
   document.getElementById('dist').textContent = Math.max(0, Math.floor((player.x - 160) / 10));
@@ -291,29 +446,28 @@ function drawBackground() {
   ctx.fillRect(0, 0, W, H);
 
   ctx.fillStyle = '#fff';
-  for (let i = 0; i < 55; i++) {
-    const sx = ((i * 149 + camX * 0.12) % (W + 50)) - 25;
-    const sy = (i * 89) % (H * 0.5);
-    ctx.globalAlpha = 0.35 + (i % 4) * 0.15;
+  for (let i = 0; i < 50; i++) {
+    const sx = ((i * 149 + camX * 0.1) % (W + 40)) - 20;
+    const sy = (i * 89) % (H * 0.48);
+    ctx.globalAlpha = 0.3 + (i % 4) * 0.15;
     ctx.fillRect(sx, sy, 2, 2);
   }
   ctx.globalAlpha = 1;
 
-  // Montanhas
   ctx.fillStyle = '#1a1a2e';
-  for (let i = 0; i < 7; i++) {
-    const mx = ((i * 240) - camX * 0.25) % (W + 320) - 120;
+  for (let i = 0; i < 6; i++) {
+    const mx = ((i * 260) - camX * 0.22) % (W + 300) - 100;
     ctx.beginPath();
     ctx.moveTo(mx, H);
-    ctx.lineTo(mx + 120, H - 100 - (i % 3) * 35);
-    ctx.lineTo(mx + 240, H);
+    ctx.lineTo(mx + 130, H - 95 - (i % 3) * 30);
+    ctx.lineTo(mx + 260, H);
     ctx.fill();
   }
 }
 
 function drawSegment(seg) {
   const sx = seg.x - camX;
-  if (sx + seg.w < -60 || sx > W + 60) return;
+  if (sx + seg.w < -50 || sx > W + 50) return;
 
   if (seg.type === 'ground') {
     ctx.fillStyle = '#2d3436';
@@ -321,9 +475,7 @@ function drawSegment(seg) {
     ctx.fillStyle = '#636e72';
     ctx.fillRect(sx, seg.y, seg.w, 6);
     ctx.fillStyle = '#b2bec3';
-    for (let i = 0; i < seg.w; i += 70) {
-      ctx.fillRect(sx + i, seg.y + 2, 32, 3);
-    }
+    for (let i = 0; i < seg.w; i += 68) ctx.fillRect(sx + i, seg.y + 2, 30, 3);
     ctx.fillStyle = '#00b894';
     ctx.fillRect(sx, seg.y - 5, seg.w, 6);
   }
@@ -332,10 +484,6 @@ function drawSegment(seg) {
     ctx.fillRect(sx, seg.y, seg.w, seg.h);
     ctx.fillStyle = '#a29bfe';
     ctx.fillRect(sx, seg.y, seg.w, 5);
-    ctx.fillStyle = '#2d3436';
-    for (let i = 6; i < seg.w; i += 14) {
-      ctx.fillRect(sx + i, seg.y + 10, 4, 4);
-    }
   }
   else if (seg.type === 'rampUp') {
     ctx.beginPath();
@@ -346,7 +494,6 @@ function drawSegment(seg) {
     ctx.closePath();
     ctx.fillStyle = '#2d3436';
     ctx.fill();
-
     ctx.beginPath();
     ctx.moveTo(sx, seg.y);
     ctx.lineTo(sx + seg.w, seg.y - seg.h);
@@ -365,7 +512,6 @@ function drawSegment(seg) {
     ctx.closePath();
     ctx.fillStyle = '#2d3436';
     ctx.fill();
-
     ctx.beginPath();
     ctx.moveTo(sx, seg.y);
     ctx.lineTo(sx + seg.w, seg.y + seg.h);
@@ -376,16 +522,43 @@ function drawSegment(seg) {
     ctx.fill();
   }
   else if (seg.type === 'boost') {
-    // Zona de boost (setas / brilho)
-    const pulse = 0.6 + Math.sin(Date.now() / 120) * 0.4;
-    ctx.fillStyle = `rgba(255, 200, 0, ${pulse})`;
+    const pulse = 0.55 + Math.sin(Date.now() / 110) * 0.45;
+    ctx.fillStyle = `rgba(255,190,0,${pulse})`;
     ctx.fillRect(sx, seg.y, seg.w, seg.h);
     ctx.fillStyle = '#ff9f1a';
-    ctx.fillRect(sx + 4, seg.y + 3, seg.w - 8, seg.h - 6);
-    // setas
+    ctx.fillRect(sx + 3, seg.y + 3, seg.w - 6, seg.h - 6);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px Courier New';
-    ctx.fillText('>>', sx + seg.w * 0.25, seg.y + 15);
+    ctx.font = 'bold 11px Courier New';
+    ctx.fillText('>> BOOST', sx + 8, seg.y + 14);
+  }
+}
+
+function drawCats() {
+  for (const cat of cats) {
+    if (cat.collected) continue;
+    const sx = cat.x - camX;
+    if (sx < -40 || sx > W + 40) continue;
+    const bob = Math.sin(Date.now() / 220 + cat.bob) * 6;
+    const sy = cat.y + bob;
+
+    // tenta imagem
+    const img = catImgs[cat.id % catImgs.length];
+    if (img && img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, sx, sy, cat.w, cat.h);
+    } else {
+      // fallback pixel cat
+      ctx.fillStyle = '#ff9ff3';
+      ctx.fillRect(sx + 6, sy + 10, 24, 20);
+      ctx.fillStyle = '#feca57';
+      ctx.fillRect(sx + 10, sy + 4, 16, 12); // cabeça
+      ctx.fillStyle = '#2d3436';
+      ctx.fillRect(sx + 12, sy + 8, 4, 4);
+      ctx.fillRect(sx + 20, sy + 8, 4, 4);
+      // orelhas
+      ctx.fillStyle = '#ff9ff3';
+      ctx.fillRect(sx + 8, sy, 6, 8);
+      ctx.fillRect(sx + 22, sy, 6, 8);
+    }
   }
 }
 
@@ -395,65 +568,54 @@ function drawPlayer() {
 
   ctx.save();
   ctx.translate(px + player.w * 0.38, py + player.h * 0.72);
-  ctx.rotate(player.angle); // ângulo negativo = frente sobe
+  ctx.rotate(player.angle);
 
   if (imgPlayer.complete && imgPlayer.naturalWidth > 0) {
     ctx.drawImage(imgPlayer, -player.w * 0.38, -player.h * 0.72, player.w, player.h);
   } else {
-    // Fallback pixel art
-    // Roda traseira
     ctx.fillStyle = '#111';
     ctx.fillRect(-30, -8, 24, 24);
     ctx.fillStyle = '#555';
     ctx.fillRect(-24, -2, 12, 12);
-    // Roda dianteira
     ctx.fillStyle = '#111';
     ctx.fillRect(24, -8, 22, 22);
     ctx.fillStyle = '#555';
     ctx.fillRect(29, -2, 12, 12);
-    // Chassis
     ctx.fillStyle = '#c0392b';
     ctx.fillRect(-18, -20, 50, 16);
-    // Tanque
     ctx.fillStyle = '#e74c3c';
     ctx.fillRect(-6, -30, 30, 14);
-    // Guidão
     ctx.fillStyle = '#2c3e50';
     ctx.fillRect(24, -38, 6, 22);
     ctx.fillRect(18, -40, 18, 6);
-    // Corpo do piloto
     ctx.fillStyle = '#3498db';
     ctx.fillRect(-2, -44, 16, 20);
-    // Capacete
     ctx.fillStyle = '#f1c40f';
     ctx.fillRect(0, -56, 14, 14);
     ctx.fillStyle = '#2c3e50';
     ctx.fillRect(3, -52, 9, 5);
-    // Braço
     ctx.fillStyle = '#3498db';
     ctx.fillRect(12, -38, 14, 7);
   }
-
   ctx.restore();
 
-  // Efeito boost
   if (player.boostTimer > 0) {
-    ctx.fillStyle = 'rgba(255,180,0,0.7)';
-    ctx.font = 'bold 14px Courier New';
-    ctx.fillText('BOOST!', px - 5, py - 18);
+    ctx.fillStyle = 'rgba(255,180,0,0.85)';
+    ctx.font = 'bold 13px Courier New';
+    ctx.fillText('BOOST!', px, py - 18);
+  }
+  if (player.wheelie) {
+    ctx.fillStyle = '#00ff88';
+    ctx.font = '12px Courier New';
+    ctx.fillText('WHEELIE!', px - 6, py - 34);
   }
 }
 
 function draw() {
   drawBackground();
   for (const seg of level) drawSegment(seg);
+  drawCats();
   drawPlayer();
-
-  if (player.wheelie) {
-    ctx.fillStyle = '#00ff88';
-    ctx.font = '13px Courier New';
-    ctx.fillText('WHEELIE!', player.x - camX - 8, player.y - 22);
-  }
 }
 
 function loop() {
