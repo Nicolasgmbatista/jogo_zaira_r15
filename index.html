@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Moto Pixel R15 – Pistas Válidas</title>
+<title>Moto Pixel R15 – Túneis Corretos</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0a12;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Courier New',monospace;overflow:hidden;user-select:none}
@@ -45,11 +45,11 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;border:4px solid #2
   <span id="hudPhase"></span> | DIST <span id="dist">0</span>m | GATOS <span id="cats">0</span>/<span id="catsTotal">0</span> | TEMPO <span id="timer">0</span>s
   <br>[M] Menu
 </div>
-<div id="hint">A/D mover | W empinar (passe obstáculos pequenos) | Rampa+BOOST = salto seguro</div>
+<div id="hint">A/D mover | W empinar | Túneis = passagem VAZIA (piso + teto)</div>
 
 <div id="mainMenu" class="panel open">
   <h1>MOTO PIXEL R15</h1>
-  <p>Pistas 100% jogáveis · Gatinhos colecionáveis</p>
+  <p>Túneis com cavidade real · Pistas 100% jogáveis</p>
   <button class="btn" id="btnJogar">JOGAR</button>
   <button class="btn sec" id="btnInfinita">PISTA INFINITA</button>
   <button class="btn sec" id="btnColecao">COLEÇÃO</button>
@@ -99,8 +99,8 @@ imgPlayer.src='img/player.png';
 const CAT_DATA=[
   {name:"Carvão",colors:["#1a1a1a","#333"],mix:0,desc:"Preto puro. Dorme 18h e acorda cansado."},
   {name:"Neve",colors:["#f5f5f5","#ddd"],mix:0,desc:"Branco total. Miado quase inaudível."},
-  {name:"Laranja",colors:["#e67e22","#d35400"],mix:0,desc:"Clássico. Perde-se em caixas com facilidade."},
-  {name:"Cinza",colors:["#7f8c8d","#95a5a6"],mix:0,desc:"Camuflagem perfeita no sofá."},
+  {name:"Laranja",colors:["#e67e22","#d35400"],mix:0,desc:"Clássico. Perde-se em caixas."},
+  {name:"Cinza",colors:["#7f8c8d","#95a5a6"],mix:0,desc:"Camuflagem no sofá."},
   {name:"Chocolate",colors:["#6d4c41","#4e342e"],mix:0,desc:"Odeia água, ama torneira."},
   {name:"Creme",colors:["#f5e6c8","#e8d5a3"],mix:0,desc:"Derrete ao sol das 15h."},
   {name:"Tigrado",colors:["#e67e22","#2c3e50"],mix:1,desc:"Rápido até ver um laser."},
@@ -119,820 +119,787 @@ const CAT_DATA=[
   {name:"Prata",colors:["#dfe6e9","#b2bec3"],mix:0,desc:"Vaidoso e brilhante."}
 ];
 
-let state='menu';
-let currentPhase=0;
+let state='menu',currentPhase=0;
 let collected=new Set(JSON.parse(localStorage.getItem('motoCats')||'[]'));
 let bestTimes=JSON.parse(localStorage.getItem('motoBest')||'{}');
 let phaseCatsGot=new Set();
-let startTime=0;
-let finishX=0;
+let startTime=0,finishX=0;
 
 const player={x:100,y:300,vx:0,vy:0,w:86,h:54,angle:0,grounded:false,onRamp:false,wheelie:false,boostTimer:0};
 let camX=0,camY=0;
 
-const G=0.46, MAXV=9.6, ACC=0.30, FRIC=0.945, WH_T=0.088, MAX_WH=1.12;
+const G=0.46,MAXV=9.6,ACC=0.30,FRIC=0.945,WH_T=0.088,MAX_WH=1.12;
 
-/* ============================================================
-   LEVEL BUILDER – SEMPRE CONECTADO E VALIDADO
-   Mantém cursor (cx, cy) = posição e altura da superfície atual.
-   Todo método avança o cursor de forma contínua.
-   ============================================================ */
+/* ================================================================
+   LEVEL BUILDER – túneis com CAVIDADE REAL
+   Teto = tipo 'ceiling' (colisão só por cima)
+   Piso = ground / rampUp / rampDown normal
+   Interior = vazio (sem colisão)
+   ================================================================ */
 class LevelBuilder {
-  constructor() {
-    this.segs = [];
-    this.cats = [];
-    this.cx = 0;          // x atual
-    this.cy = 420;        // y da superfície atual
-    this.finishX = 0;
+  constructor(){
+    this.segs=[];
+    this.cats=[];
+    this.cx=0;
+    this.cy=420;
+    this.finishX=0;
   }
 
-  // chão plano
-  flat(w) {
-    this.segs.push({type:'ground', x:this.cx, y:this.cy, w, h:160});
-    this.cx += w;
+  flat(w){
+    this.segs.push({type:'ground',x:this.cx,y:this.cy,w,h:160});
+    this.cx+=w;
     return this;
   }
 
-  // subida gradual (slope contínuo)
-  slopeUp(w, rise) {
-    rise = Math.min(rise, 160); // limite seguro
-    this.segs.push({type:'rampUp', x:this.cx, y:this.cy, w, h:rise});
-    this.cx += w;
-    this.cy -= rise;
+  slopeUp(w,rise){
+    rise=Math.min(rise,150);
+    this.segs.push({type:'rampUp',x:this.cx,y:this.cy,w,h:rise});
+    this.cx+=w;
+    this.cy-=rise;
     return this;
   }
 
-  // descida gradual
-  slopeDown(w, drop) {
-    drop = Math.min(drop, 160);
-    this.segs.push({type:'rampDown', x:this.cx, y:this.cy, w, h:drop});
-    this.cx += w;
-    this.cy += drop;
+  slopeDown(w,drop){
+    drop=Math.min(drop,150);
+    this.segs.push({type:'rampDown',x:this.cx,y:this.cy,w,h:drop});
+    this.cx+=w;
+    this.cy+=drop;
     return this;
   }
 
-  // obstáculo pequeno (exige wheelie)
-  obstacle(ow=28, oh=17) {
-    // colocado sobre o chão atual, um pouco para trás do cursor
-    const ox = this.cx - 40 - Math.random()*30;
-    this.segs.push({type:'obstacle', x:ox, y:this.cy - oh + 2, w:ow, h:oh});
+  obstacle(ow=28,oh=17){
+    const ox=this.cx-50-Math.random()*25;
+    this.segs.push({type:'obstacle',x:ox,y:this.cy-oh+2,w:ow,h:oh});
     return this;
   }
 
-  // boost no chão atual
-  boost(bw=88) {
-    this.segs.push({type:'boost', x:this.cx - 30, y:this.cy - 16, w:bw, h:16});
+  boost(bw=88){
+    this.segs.push({type:'boost',x:this.cx-30,y:this.cy-16,w:bw,h:16});
     return this;
   }
 
-  /* Salto validado
-     Calcula gap máximo seguro a partir da altura da rampa e se tem boost.
-     Física aproximada: tempo de voo ≈ sqrt(2*h/G) + margem, distância ≈ vx * t
-     Valores seguros empíricos para a física atual do jogo.
-  */
-  jump(rampW, rampH, forceBoost=false) {
-    rampH = Math.max(70, Math.min(rampH, 150));
-    rampW = Math.max(120, Math.min(rampW, 240));
+  jump(rampW,rampH,forceBoost=false){
+    rampH=Math.max(70,Math.min(rampH,145));
+    rampW=Math.max(120,Math.min(rampW,230));
+    let maxGap=90+rampH*0.95+rampW*0.15;
+    if(forceBoost) maxGap+=110;
+    maxGap=Math.floor(maxGap*0.82);
+    maxGap=Math.max(70,Math.min(maxGap,270));
 
-    // gap máximo seguro (pixels)
-    let maxGap = 90 + rampH * 0.95 + rampW * 0.15;
-    if (forceBoost) maxGap += 110;
-    // margem de segurança
-    maxGap = Math.floor(maxGap * 0.82);
-    maxGap = Math.max(70, Math.min(maxGap, 280));
-
-    // rampa
-    this.segs.push({type:'rampUp', x:this.cx, y:this.cy, w:rampW, h:rampH});
-    if (forceBoost) {
-      this.segs.push({type:'boost', x:this.cx + rampW * 0.45, y:this.cy - rampH + 6, w:90, h:16});
+    this.segs.push({type:'rampUp',x:this.cx,y:this.cy,w:rampW,h:rampH});
+    if(forceBoost){
+      this.segs.push({type:'boost',x:this.cx+rampW*0.45,y:this.cy-rampH+6,w:90,h:16});
     }
-    this.cx += rampW;
-
-    // buraco (vazio – só avança x)
-    this.cx += maxGap;
-
-    // pouso no mesmo nível da saída da rampa
-    const landY = this.cy - rampH;
-    this.cy = landY;
-    // pequeno flat de segurança após pouso
-    this.segs.push({type:'ground', x:this.cx, y:this.cy, w:220, h:160});
-    this.cx += 220;
+    this.cx+=rampW;
+    this.cx+=maxGap;
+    this.cy-=rampH;
+    this.segs.push({type:'ground',x:this.cx,y:this.cy,w:220,h:160});
+    this.cx+=220;
     return this;
   }
 
-  // plataforma elevada (sobe, fica, desce)
-  platform(platW, rise) {
-    rise = Math.min(rise, 140);
-    this.slopeUp(130, rise);
-    this.segs.push({type:'platform', x:this.cx, y:this.cy, w:platW, h:24});
-    this.cx += platW;
-    this.slopeDown(130, rise);
+  platform(platW,rise){
+    rise=Math.min(rise,130);
+    this.slopeUp(120,rise);
+    this.segs.push({type:'platform',x:this.cx,y:this.cy,w:platW,h:24});
+    this.cx+=platW;
+    this.slopeDown(120,rise);
     return this;
   }
 
-  /* TÚNEL PARA BAIXO
-     Desce → interior plano → sobe de volta (ou para nova altura)
+  /* ---------- TÚNEIS COM CAVIDADE ----------
+     clearance = altura livre interna (px)
+     Teto é um segmento 'ceiling' paralelo ao piso.
+     A moto só colide com piso e teto.
   */
-  tunnelDown(length, depth) {
-    depth = Math.min(depth, 110);
-    length = Math.max(260, length);
 
-    // entrada (descida)
-    this.slopeDown(110, depth);
+  // Túnel horizontal (piso plano)
+  tunnelFlat(length, clearance=110){
+    length=Math.max(220,length);
+    const floorY=this.cy;
+    const ceilY=floorY-clearance;
 
-    // interior
-    this.segs.push({type:'tunnel', x:this.cx, y:this.cy - 30, w:length, h:depth + 90});
-    // chão interno
-    this.segs.push({type:'ground', x:this.cx, y:this.cy, w:length, h:140});
-    this.cx += length;
+    // piso
+    this.segs.push({type:'ground',x:this.cx,y:floorY,w:length,h:160});
+    // teto (sólido acima)
+    this.segs.push({type:'ceiling',x:this.cx,y:ceilY,w:length,h:30});
+    // visual walls (só desenho, sem colisão extra)
+    this.segs.push({type:'tunnelVis',x:this.cx,y:ceilY,w:length,h:clearance});
 
-    // saída (subida de volta)
-    this.slopeUp(110, depth);
+    this.cx+=length;
     return this;
   }
 
-  /* TÚNEL PARA CIMA (sobe, interior, desce ou fica mais alto) */
-  tunnelUp(length, rise) {
-    rise = Math.min(rise, 100);
-    length = Math.max(240, length);
+  // Túnel diagonal PARA BAIXO (piso desce, teto acompanha)
+  tunnelDown(length, drop, clearance=115){
+    drop=Math.min(drop,130);
+    length=Math.max(260,length);
 
-    this.slopeUp(100, rise);
-    this.segs.push({type:'tunnel', x:this.cx, y:this.cy - 30, w:length, h:rise + 90});
-    this.segs.push({type:'ground', x:this.cx, y:this.cy, w:length, h:140});
-    this.cx += length;
-    this.slopeDown(100, rise);
+    const startY=this.cy;
+    const endY=startY+drop;
+    const ceilStart=startY-clearance;
+    const ceilEnd=endY-clearance;
+
+    // piso = rampDown
+    this.segs.push({type:'rampDown',x:this.cx,y:startY,w:length,h:drop});
+    // teto = ceiling diagonal (mesmo slope)
+    this.segs.push({
+      type:'ceilingRamp',
+      x:this.cx, y:ceilStart,
+      w:length, h:drop,   // h positivo = desce (mesmo sentido do piso)
+      dir:'down'
+    });
+    // visual
+    this.segs.push({type:'tunnelVis',x:this.cx,y:ceilStart,w:length,h:clearance+drop,slope:drop});
+
+    this.cx+=length;
+    this.cy=endY;
     return this;
   }
 
-  // gato na posição atual (ou um pouco atrás)
-  cat(tid, offsetX=-60, offsetY=-40) {
+  // Túnel diagonal PARA CIMA
+  tunnelUp(length, rise, clearance=115){
+    rise=Math.min(rise,130);
+    length=Math.max(260,length);
+
+    const startY=this.cy;
+    const endY=startY-rise;
+    const ceilStart=startY-clearance;
+    const ceilEnd=endY-clearance;
+
+    // piso = rampUp
+    this.segs.push({type:'rampUp',x:this.cx,y:startY,w:length,h:rise});
+    // teto sobe junto
+    this.segs.push({
+      type:'ceilingRamp',
+      x:this.cx, y:ceilStart,
+      w:length, h:rise,
+      dir:'up'
+    });
+    this.segs.push({type:'tunnelVis',x:this.cx,y:ceilEnd,w:length,h:clearance+rise,slope:-rise});
+
+    this.cx+=length;
+    this.cy=endY;
+    return this;
+  }
+
+  // Túnel longo: desce depois sobe (ou vice-versa) – interior contínuo
+  tunnelDownThenUp(lenDown, drop, lenUp, rise, clearance=115){
+    this.tunnelDown(lenDown, drop, clearance);
+    this.tunnelUp(lenUp, rise, clearance);
+    return this;
+  }
+
+  cat(tid, ox=-55, oy=-38){
     this.cats.push({
-      x: this.cx + offsetX,
-      y: this.cy + offsetY,
-      w: 34, h: 34,
-      typeId: tid % CAT_DATA.length,
-      collected: false,
-      bob: Math.random() * 6
+      x:this.cx+ox, y:this.cy+oy,
+      w:34,h:34, typeId:tid%CAT_DATA.length,
+      collected:false, bob:Math.random()*6
     });
     return this;
   }
 
-  finish() {
-    this.segs.push({type:'finish', x:this.cx, y:this.cy - 60, w:36, h:90});
-    this.finishX = this.cx + 18;
-    this.flat(180); // margem depois da linha
+  finish(){
+    this.segs.push({type:'finish',x:this.cx,y:this.cy-55,w:36,h:90});
+    this.finishX=this.cx+18;
+    this.flat(180);
     return this;
   }
 
-  build() {
-    return { level: this.segs, cats: this.cats, finishX: this.finishX };
+  build(){
+    return {level:this.segs, cats:this.cats, finishX:this.finishX};
   }
 }
 
-/* ============================================================
-   10 FASES – construídas exclusivamente com o Builder
-   ============================================================ */
-function makePhase(id) {
-  const B = new LevelBuilder();
-  let tid = (id - 1) * 2;
+/* ========== 10 FASES ========== */
+function makePhase(id){
+  const B=new LevelBuilder();
+  let t=(id-1)*2;
 
-  if (id === 1) { // Aprendizado
-    B.flat(420).obstacle().flat(160).cat(tid++)
-     .slopeUp(140, 80).flat(200).obstacle().flat(140)
-     .jump(150, 95, false)
-     .flat(180).cat(tid++).flat(160).obstacle().flat(120)
+  if(id===1){
+    B.flat(400).obstacle().flat(150).cat(t++)
+     .slopeUp(130,75).flat(180).obstacle().flat(120)
+     .jump(145,90,false)
+     .flat(160).cat(t++).flat(140).obstacle().flat(110)
      .finish();
   }
-  else if (id === 2) {
-    B.flat(360).obstacle().obstacle().flat(180)
-     .slopeUp(130, 75).flat(160).cat(tid++)
-     .slopeDown(120, 75).flat(200)
-     .jump(160, 105, false)
-     .flat(150).obstacle().flat(140).cat(tid++)
-     .platform(160, 90).cat(tid++)
-     .flat(160).finish();
-  }
-  else if (id === 3) { // Túnel
-    B.flat(340).obstacle().flat(150)
-     .slopeUp(140, 85).flat(160).cat(tid++)
-     .tunnelDown(320, 85)
-     .obstacle().cat(tid++).flat(180)
-     .jump(155, 100, false)
-     .flat(160).cat(tid++).flat(140).finish();
-  }
-  else if (id === 4) { // Velocidade
-    B.flat(300)
-     .slopeDown(180, 70).boost()
-     .flat(140).jump(180, 120, true)
-     .flat(180).cat(tid++).obstacle().flat(160)
-     .slopeDown(150, 55).boost()
-     .jump(170, 115, true)
-     .flat(160).cat(tid++).obstacle().obstacle().flat(140)
-     .cat(tid++).flat(120).finish();
-  }
-  else if (id === 5) { // Altura
-    B.flat(280)
-     .slopeUp(160, 120).flat(180).cat(tid++, -40, -35)
-     .platform(170, 70).cat(tid++)
-     .slopeDown(140, 90).flat(160).obstacle().flat(140)
-     .slopeUp(150, 100).flat(150).cat(tid++)
-     .slopeDown(140, 100).flat(180).finish();
-  }
-  else if (id === 6) { // Combinação
-    B.flat(260).obstacle().obstacle().flat(140)
-     .slopeUp(140, 90).flat(130)
-     .tunnelDown(300, 80)
-     .obstacle().cat(tid++).flat(160)
-     .slopeDown(130, 45).boost()
-     .jump(175, 125, true)
-     .flat(150).cat(tid++)
-     .platform(150, 85).cat(tid++)
+  else if(id===2){
+    B.flat(340).obstacle().obstacle().flat(160)
+     .slopeUp(125,70).flat(150).cat(t++)
+     .slopeDown(115,70).flat(180)
+     .jump(155,100,false)
+     .flat(140).obstacle().flat(130).cat(t++)
+     .platform(150,85).cat(t++)
      .flat(150).finish();
   }
-  else if (id === 7) { // Floresta
-    B.flat(320).obstacle(32,20).obstacle(28,18).flat(180)
-     .slopeUp(145, 90).flat(140).cat(tid++)
-     .slopeDown(120, 70).flat(200)
-     .obstacle(30,19).obstacle(26,17).flat(160)
-     .jump(160, 110, false)
-     .flat(160).cat(tid++)
-     .platform(140, 80).cat(tid++)
-     .flat(150).obstacle(34,21).flat(130).finish();
+  else if(id===3){ // TÚNEL (primeira vez)
+    B.flat(320).obstacle().flat(140)
+     .slopeUp(130,80).flat(150).cat(t++)
+     // entrada suave + túnel para baixo
+     .slopeDown(90,40)
+     .tunnelDown(300,70,120)
+     .obstacle().cat(t++).flat(160)
+     .jump(150,95,false)
+     .flat(150).cat(t++).flat(130).finish();
   }
-  else if (id === 8) { // Industrial
-    B.flat(280).obstacle(34,22).flat(150)
-     .tunnelDown(340, 90)
-     .obstacle(30,20).obstacle(28,18).cat(tid++).flat(170)
-     .jump(170, 120, true)
-     .flat(160).cat(tid++)
-     .platform(160, 95).cat(tid++)
-     .slopeDown(130, 80).flat(160)
-     .obstacle(32,22).flat(140).finish();
+  else if(id===4){
+    B.flat(280)
+     .slopeDown(170,65).boost()
+     .flat(130).jump(175,115,true)
+     .flat(160).cat(t++).obstacle().flat(150)
+     .slopeDown(140,50).boost()
+     .jump(165,110,true)
+     .flat(150).cat(t++).obstacle().obstacle().flat(130)
+     .cat(t++).flat(110).finish();
   }
-  else if (id === 9) { // Noite
-    B.flat(300).obstacle().flat(160)
-     .slopeUp(150, 95).flat(160)
-     .tunnelDown(380, 95)
-     .obstacle().obstacle().cat(tid++).flat(160)
-     .slopeDown(140, 50).boost()
-     .jump(185, 130, true)
-     .flat(150).cat(tid++)
-     .platform(150, 100).cat(tid++)
-     .flat(160).obstacle().obstacle().flat(140).finish();
+  else if(id===5){
+    B.flat(260)
+     .slopeUp(150,115).flat(170).cat(t++,-40,-35)
+     .platform(160,65).cat(t++)
+     .slopeDown(130,85).flat(150).obstacle().flat(130)
+     .slopeUp(140,95).flat(140).cat(t++)
+     .slopeDown(130,95).flat(170).finish();
   }
-  else { // Fase 10 – Final
-    B.flat(240).obstacle().obstacle().obstacle().flat(140)
-     .slopeUp(140, 90).flat(120)
-     .tunnelDown(300, 85)
-     .obstacle().cat(tid++).flat(150)
-     .slopeDown(120, 40).boost()
-     .jump(190, 135, true)
-     .flat(140).cat(tid++)
-     .platform(160, 100).cat(tid++)
-     .slopeDown(140, 90).flat(160)
-     .obstacle().obstacle().flat(140)
-     .jump(165, 115, true)
-     .flat(150).cat(tid++).flat(130).finish();
+  else if(id===6){
+    B.flat(240).obstacle().obstacle().flat(130)
+     .slopeUp(130,85).flat(120)
+     .tunnelDown(280,75,115)
+     .obstacle().cat(t++).flat(150)
+     .slopeDown(120,40).boost()
+     .jump(170,120,true)
+     .flat(140).cat(t++)
+     .platform(145,80).cat(t++)
+     .flat(140).finish();
   }
-
+  else if(id===7){
+    B.flat(300).obstacle(32,20).obstacle(28,18).flat(170)
+     .slopeUp(140,85).flat(130).cat(t++)
+     .slopeDown(115,65).flat(180)
+     .obstacle(30,19).obstacle(26,17).flat(150)
+     .jump(155,105,false)
+     .flat(150).cat(t++)
+     .platform(135,75).cat(t++)
+     .flat(140).obstacle(34,21).flat(120).finish();
+  }
+  else if(id===8){ // Industrial + túneis
+    B.flat(260).obstacle(34,22).flat(140)
+     .tunnelDown(320,85,118)
+     .obstacle(30,20).obstacle(28,18).cat(t++).flat(160)
+     .jump(165,115,true)
+     .flat(150).cat(t++)
+     .platform(155,90).cat(t++)
+     .slopeDown(125,75).flat(150)
+     .obstacle(32,22).flat(130).finish();
+  }
+  else if(id===9){ // Noite + túneis diagonais
+    B.flat(280).obstacle().flat(150)
+     .slopeUp(140,90).flat(150)
+     .tunnelDown(300,80,120)
+     .obstacle().obstacle().cat(t++).flat(150)
+     // sobe de volta com túnel
+     .tunnelUp(280,70,115)
+     .flat(140).cat(t++)
+     .slopeDown(130,45).boost()
+     .jump(180,125,true)
+     .flat(140).cat(t++)
+     .platform(145,95).flat(150)
+     .obstacle().obstacle().flat(130).finish();
+  }
+  else{ // Fase 10
+    B.flat(220).obstacle().obstacle().obstacle().flat(130)
+     .slopeUp(130,85).flat(110)
+     .tunnelDown(280,80,115)
+     .obstacle().cat(t++).flat(140)
+     .slopeDown(110,35).boost()
+     .jump(185,130,true)
+     .flat(130).cat(t++)
+     .platform(155,95).cat(t++)
+     .slopeDown(130,85).flat(150)
+     .obstacle().obstacle().flat(130)
+     .tunnelUp(260,65,110)
+     .jump(160,110,true)
+     .flat(140).cat(t++).flat(120).finish();
+  }
   return B.build();
 }
 
-/* ============================================================
-   INFINITO – segmentos pré-validados encadeados
-   ============================================================ */
-const INF_TEMPLATES = [
-  // flat + obstacles
-  b => b.flat(320 + Math.random()*180).obstacle().flat(80),
-  b => b.flat(280).obstacle().obstacle().flat(100),
-  // slope up / down
-  b => b.slopeUp(140 + Math.random()*40, 70 + Math.random()*40).flat(160),
-  b => b.slopeDown(150 + Math.random()*40, 55 + Math.random()*35).flat(180),
-  // jump seguro (sem boost)
-  b => b.jump(145 + Math.random()*30, 90 + Math.random()*25, false),
-  // jump com boost
-  b => b.slopeDown(120, 40).boost().jump(160 + Math.random()*30, 110 + Math.random()*25, true),
-  // tunnel down
-  b => b.tunnelDown(280 + Math.random()*80, 70 + Math.random()*30).flat(100),
-  // tunnel up
-  b => b.tunnelUp(260 + Math.random()*60, 65 + Math.random()*25).flat(100),
-  // platform
-  b => b.platform(140 + Math.random()*50, 75 + Math.random()*35).flat(80),
-  // combo curto
-  b => b.flat(180).obstacle().slopeUp(120, 70).flat(120).obstacle().flat(80),
+/* ========== INFINITO ========== */
+const INF_TEMPLATES=[
+  b=>b.flat(300+Math.random()*160).obstacle().flat(70),
+  b=>b.flat(260).obstacle().obstacle().flat(90),
+  b=>b.slopeUp(130+Math.random()*35,65+Math.random()*35).flat(150),
+  b=>b.slopeDown(140+Math.random()*35,50+Math.random()*30).flat(160),
+  b=>b.jump(140+Math.random()*25,88+Math.random()*22,false),
+  b=>b.slopeDown(110,38).boost().jump(155+Math.random()*25,108+Math.random()*22,true),
+  b=>b.tunnelDown(270+Math.random()*60,65+Math.random()*25,115).flat(90),
+  b=>b.tunnelUp(250+Math.random()*50,60+Math.random()*20,115).flat(90),
+  b=>b.platform(130+Math.random()*40,70+Math.random()*30).flat(70),
+  b=>b.flat(160).obstacle().slopeUp(115,65).flat(110).obstacle().flat(70),
+  b=>b.tunnelDownThenUp(200,55,200,55,112).flat(80),
 ];
 
-let infBuilder = null;
+let infBuilder=null;
 
-function resetInfinite() {
-  infBuilder = new LevelBuilder();
-  infBuilder.flat(500);
-  // gera um bom pedaço inicial
-  for (let i = 0; i < 8; i++) {
-    const t = INF_TEMPLATES[Math.floor(Math.random() * INF_TEMPLATES.length)];
+function resetInfinite(){
+  infBuilder=new LevelBuilder();
+  infBuilder.flat(480);
+  for(let i=0;i<7;i++){
+    const t=INF_TEMPLATES[Math.floor(Math.random()*INF_TEMPLATES.length)];
     t(infBuilder);
-    if (Math.random() > 0.55) infBuilder.cat(Math.floor(Math.random() * CAT_DATA.length));
+    if(Math.random()>0.55) infBuilder.cat(Math.floor(Math.random()*CAT_DATA.length));
   }
-  level = infBuilder.segs;
-  cats = infBuilder.cats;
-  player.x = 100; player.y = 300; player.vx = 0; player.vy = 0;
-  player.angle = 0; player.boostTimer = 0;
-  camX = 0; camY = 0;
-  phaseCatsGot = new Set();
+  level=infBuilder.segs;
+  cats=infBuilder.cats;
+  player.x=100;player.y=300;player.vx=0;player.vy=0;
+  player.angle=0;player.boostTimer=0;
+  camX=0;camY=0;phaseCatsGot=new Set();
 }
 
-function generateInfinite() {
-  if (!infBuilder) return;
-  while (infBuilder.cx < camX + W + 1000) {
-    // evita repetir o mesmo tipo muitas vezes
-    let t;
-    do {
-      t = INF_TEMPLATES[Math.floor(Math.random() * INF_TEMPLATES.length)];
-    } while (Math.random() < 0.25);
+function generateInfinite(){
+  if(!infBuilder)return;
+  while(infBuilder.cx<camX+W+1000){
+    const t=INF_TEMPLATES[Math.floor(Math.random()*INF_TEMPLATES.length)];
     t(infBuilder);
-    if (Math.random() > 0.6) {
-      infBuilder.cat(Math.floor(Math.random() * CAT_DATA.length), -70 - Math.random()*40, -38);
-    }
+    if(Math.random()>0.58) infBuilder.cat(Math.floor(Math.random()*CAT_DATA.length),-65-Math.random()*35,-36);
   }
-  level = infBuilder.segs;
-  cats = infBuilder.cats;
-
-  // limpa bem atrás
-  const minX = camX - 600;
-  while (level.length && level[0].x + (level[0].w || 0) < minX) level.shift();
-  while (cats.length && cats[0].x < minX) cats.shift();
+  level=infBuilder.segs;
+  cats=infBuilder.cats;
+  const minX=camX-600;
+  while(level.length&&level[0].x+(level[0].w||0)<minX) level.shift();
+  while(cats.length&&cats[0].x<minX) cats.shift();
 }
 
-/* ============================================================
-   RESTANTE DO JOGO
-   ============================================================ */
-let level = [], cats = [];
+let level=[],cats=[];
 
-function getSegY(seg, px) {
-  if (['ground','platform','boost','obstacle','finish','tunnel'].includes(seg.type)) return seg.y;
-  if (seg.type === 'rampUp') {
-    const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
-    return seg.y - t * seg.h;
+/* ========== HELPERS DE COLISÃO ========== */
+function getSegY(seg,px){
+  if(['ground','platform','boost','obstacle','finish','tunnelVis'].includes(seg.type)) return seg.y;
+  if(seg.type==='rampUp'){
+    const t=Math.max(0,Math.min(1,(px-seg.x)/seg.w));
+    return seg.y-t*seg.h;
   }
-  if (seg.type === 'rampDown') {
-    const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
-    return seg.y + t * seg.h;
+  if(seg.type==='rampDown'){
+    const t=Math.max(0,Math.min(1,(px-seg.x)/seg.w));
+    return seg.y+t*seg.h;
   }
   return seg.y;
 }
-function getSlope(seg) {
-  if (seg.type === 'rampUp') return -seg.h / seg.w;
-  if (seg.type === 'rampDown') return seg.h / seg.w;
+
+// Y do teto (parte de baixo do ceiling)
+function getCeilY(seg,px){
+  if(seg.type==='ceiling') return seg.y+seg.h; // parte inferior do bloco de teto
+  if(seg.type==='ceilingRamp'){
+    const t=Math.max(0,Math.min(1,(px-seg.x)/seg.w));
+    if(seg.dir==='down') return seg.y + t*seg.h + 28; // espessura ~28
+    return seg.y - t*seg.h + 28;
+  }
+  return null;
+}
+
+function getSlope(seg){
+  if(seg.type==='rampUp') return -seg.h/seg.w;
+  if(seg.type==='rampDown') return seg.h/seg.w;
   return 0;
 }
 
-const keys = {};
-window.addEventListener('keydown', e => {
-  keys[e.code] = true;
-  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
-  if (e.code === 'KeyM' || e.code === 'Escape') {
-    if (state === 'playing' || state === 'infinite') openMain();
+/* ========== INPUT / MENUS ========== */
+const keys={};
+window.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  if(e.code==='KeyM'||e.code==='Escape'){
+    if(state==='playing'||state==='infinite') openMain();
   }
 });
-window.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('keyup',e=>keys[e.code]=false);
 
-document.getElementById('btnJogar').onclick = () => {
-  state = 'phases';
+document.getElementById('btnJogar').onclick=()=>{
+  state='phases';
   document.getElementById('mainMenu').classList.remove('open');
   document.getElementById('phaseMenu').classList.add('open');
   buildPhaseButtons();
 };
-document.getElementById('btnInfinita').onclick = startInfinite;
-document.getElementById('btnColecao').onclick = () => {
-  state = 'collection';
+document.getElementById('btnInfinita').onclick=startInfinite;
+document.getElementById('btnColecao').onclick=()=>{
+  state='collection';
   document.getElementById('mainMenu').classList.remove('open');
   document.getElementById('colMenu').classList.add('open');
   rebuildCol();
 };
-document.getElementById('btnVoltarFases').onclick = openMain;
-document.getElementById('btnVoltarCol').onclick = openMain;
-document.getElementById('btnCloseDetail').onclick = () => document.getElementById('detail').classList.remove('open');
-document.getElementById('btnNext').onclick = () => {
-  if (currentPhase < 10) startPhase(currentPhase + 1);
-  else openMain();
-};
-document.getElementById('btnRetry').onclick = () => {
-  document.getElementById('finishPanel').classList.remove('open');
-  startPhase(currentPhase);
-};
-document.getElementById('btnMenuFinish').onclick = () => {
-  document.getElementById('finishPanel').classList.remove('open');
-  openMain();
-};
+document.getElementById('btnVoltarFases').onclick=openMain;
+document.getElementById('btnVoltarCol').onclick=openMain;
+document.getElementById('btnCloseDetail').onclick=()=>document.getElementById('detail').classList.remove('open');
+document.getElementById('btnNext').onclick=()=>{if(currentPhase<10)startPhase(currentPhase+1);else openMain();};
+document.getElementById('btnRetry').onclick=()=>{document.getElementById('finishPanel').classList.remove('open');startPhase(currentPhase);};
+document.getElementById('btnMenuFinish').onclick=()=>{document.getElementById('finishPanel').classList.remove('open');openMain();};
 
-function openMain() {
-  state = 'menu';
+function openMain(){
+  state='menu';
   document.getElementById('mainMenu').classList.add('open');
   document.getElementById('phaseMenu').classList.remove('open');
   document.getElementById('colMenu').classList.remove('open');
   document.getElementById('finishPanel').classList.remove('open');
-  document.getElementById('hud').style.display = 'none';
-  document.getElementById('hint').style.display = 'none';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('hint').style.display='none';
   document.getElementById('detail').classList.remove('open');
 }
-
-function buildPhaseButtons() {
-  const g = document.getElementById('phaseGrid');
-  g.innerHTML = '';
-  for (let i = 1; i <= 10; i++) {
-    const b = document.createElement('button');
-    b.className = 'phaseBtn';
-    b.textContent = 'FASE ' + i;
-    b.onclick = () => startPhase(i);
-    g.appendChild(b);
+function buildPhaseButtons(){
+  const g=document.getElementById('phaseGrid');g.innerHTML='';
+  for(let i=1;i<=10;i++){
+    const b=document.createElement('button');b.className='phaseBtn';b.textContent='FASE '+i;
+    b.onclick=()=>startPhase(i);g.appendChild(b);
   }
 }
-
-function startPhase(id) {
-  currentPhase = id;
-  const data = makePhase(id);
-  level = data.level;
-  cats = data.cats;
-  finishX = data.finishX;
-  player.x = 100; player.y = 300; player.vx = 0; player.vy = 0;
-  player.angle = 0; player.boostTimer = 0;
-  camX = 0; camY = 0;
-  phaseCatsGot = new Set();
-  startTime = performance.now();
-  state = 'playing';
+function startPhase(id){
+  currentPhase=id;
+  const data=makePhase(id);
+  level=data.level;cats=data.cats;finishX=data.finishX;
+  player.x=100;player.y=300;player.vx=0;player.vy=0;player.angle=0;player.boostTimer=0;
+  camX=0;camY=0;phaseCatsGot=new Set();startTime=performance.now();
+  state='playing';
   document.getElementById('phaseMenu').classList.remove('open');
   document.getElementById('mainMenu').classList.remove('open');
   document.getElementById('finishPanel').classList.remove('open');
-  document.getElementById('hud').style.display = 'block';
-  document.getElementById('hint').style.display = 'block';
-  document.getElementById('hudPhase').textContent = 'FASE ' + id;
-  document.getElementById('catsTotal').textContent = cats.length;
-  document.getElementById('cats').textContent = '0';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('hint').style.display='block';
+  document.getElementById('hudPhase').textContent='FASE '+id;
+  document.getElementById('catsTotal').textContent=cats.length;
+  document.getElementById('cats').textContent='0';
 }
-
-function startInfinite() {
-  state = 'infinite';
-  resetInfinite();
-  startTime = performance.now();
+function startInfinite(){
+  state='infinite';resetInfinite();startTime=performance.now();
   document.getElementById('mainMenu').classList.remove('open');
-  document.getElementById('hud').style.display = 'block';
-  document.getElementById('hint').style.display = 'block';
-  document.getElementById('hudPhase').textContent = 'INFINITO';
-  document.getElementById('catsTotal').textContent = '∞';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('hint').style.display='block';
+  document.getElementById('hudPhase').textContent='INFINITO';
+  document.getElementById('catsTotal').textContent='∞';
 }
 
-function rebuildCol() {
-  const grid = document.getElementById('collectionGrid');
-  grid.innerHTML = '';
-  CAT_DATA.forEach((d, i) => {
-    const got = collected.has(i);
-    const card = document.createElement('div');
-    card.className = 'catCard' + (got ? ' got' : ' locked');
-    const cnv = document.createElement('canvas');
-    cnv.width = 36; cnv.height = 36;
-    const c = cnv.getContext('2d');
-    c.imageSmoothingEnabled = false;
-    if (got) drawCat(c, d, 36);
-    else { c.fillStyle = '#333'; c.fillRect(4,4,28,28); c.fillStyle = '#555'; c.font = '14px monospace'; c.fillText('?',14,24); }
+function rebuildCol(){
+  const grid=document.getElementById('collectionGrid');grid.innerHTML='';
+  CAT_DATA.forEach((d,i)=>{
+    const got=collected.has(i);
+    const card=document.createElement('div');card.className='catCard'+(got?' got':' locked');
+    const cnv=document.createElement('canvas');cnv.width=36;cnv.height=36;
+    const c=cnv.getContext('2d');c.imageSmoothingEnabled=false;
+    if(got) drawCat(c,d,36);
+    else{c.fillStyle='#333';c.fillRect(4,4,28,28);c.fillStyle='#555';c.font='14px monospace';c.fillText('?',14,24);}
     card.appendChild(cnv);
-    const nm = document.createElement('div');
-    nm.className = 'nm';
-    nm.textContent = got ? d.name : '???';
-    card.appendChild(nm);
-    if (got) card.onclick = () => showDetail(i);
+    const nm=document.createElement('div');nm.className='nm';nm.textContent=got?d.name:'???';card.appendChild(nm);
+    if(got) card.onclick=()=>showDetail(i);
     grid.appendChild(card);
   });
-  document.getElementById('colCount').textContent = collected.size + ' / ' + CAT_DATA.length;
+  document.getElementById('colCount').textContent=collected.size+' / '+CAT_DATA.length;
 }
-function showDetail(id) {
-  const d = CAT_DATA[id];
-  document.getElementById('dName').textContent = d.name;
-  document.getElementById('dDesc').textContent = d.desc;
-  const c = document.getElementById('dSwatch').getContext('2d');
-  c.imageSmoothingEnabled = false;
-  c.clearRect(0,0,64,64);
-  drawCat(c, d, 64);
+function showDetail(id){
+  const d=CAT_DATA[id];
+  document.getElementById('dName').textContent=d.name;
+  document.getElementById('dDesc').textContent=d.desc;
+  const c=document.getElementById('dSwatch').getContext('2d');
+  c.imageSmoothingEnabled=false;c.clearRect(0,0,64,64);drawCat(c,d,64);
   document.getElementById('detail').classList.add('open');
 }
-function drawCat(c, d, sz, ox=0, oy=0) {
-  const s = sz / 16;
-  c.fillStyle = d.colors[0];
-  c.fillRect(ox+3*s, oy+7*s, 10*s, 7*s);
-  c.fillRect(ox+4*s, oy+2*s, 8*s, 6*s);
-  c.fillRect(ox+3*s, oy, 3*s, 4*s);
-  c.fillRect(ox+10*s, oy, 3*s, 4*s);
-  if (d.mix && d.colors[1]) {
-    c.fillStyle = d.colors[1];
-    c.fillRect(ox+8*s, oy+3*s, 4*s, 5*s);
-    c.fillRect(ox+5*s, oy+9*s, 5*s, 4*s);
-  }
-  if (d.colors[2]) { c.fillStyle = d.colors[2]; c.fillRect(ox+4*s, oy+4*s, 3*s, 3*s); }
-  c.fillStyle = '#222';
-  c.fillRect(ox+5*s, oy+4*s, 2*s, 2*s);
-  c.fillRect(ox+9*s, oy+4*s, 2*s, 2*s);
-  c.fillStyle = '#ff9ff3';
-  c.fillRect(ox+7*s, oy+6*s, 2*s, 1*s);
+function drawCat(c,d,sz,ox=0,oy=0){
+  const s=sz/16;
+  c.fillStyle=d.colors[0];
+  c.fillRect(ox+3*s,oy+7*s,10*s,7*s);
+  c.fillRect(ox+4*s,oy+2*s,8*s,6*s);
+  c.fillRect(ox+3*s,oy,3*s,4*s);
+  c.fillRect(ox+10*s,oy,3*s,4*s);
+  if(d.mix&&d.colors[1]){c.fillStyle=d.colors[1];c.fillRect(ox+8*s,oy+3*s,4*s,5*s);c.fillRect(ox+5*s,oy+9*s,5*s,4*s);}
+  if(d.colors[2]){c.fillStyle=d.colors[2];c.fillRect(ox+4*s,oy+4*s,3*s,3*s);}
+  c.fillStyle='#222';c.fillRect(ox+5*s,oy+4*s,2*s,2*s);c.fillRect(ox+9*s,oy+4*s,2*s,2*s);
+  c.fillStyle='#ff9ff3';c.fillRect(ox+7*s,oy+6*s,2*s,1*s);
 }
 
-function update() {
-  if (state !== 'playing' && state !== 'infinite') return;
+/* ========== UPDATE ========== */
+function update(){
+  if(state!=='playing'&&state!=='infinite') return;
 
-  if (keys['KeyD'] || keys['ArrowRight']) player.vx += ACC;
-  if (keys['KeyA'] || keys['ArrowLeft'])  player.vx -= ACC * 0.65;
-  player.vx = Math.max(-MAXV * 0.45, Math.min(MAXV, player.vx));
-  if (player.grounded) player.vx *= FRIC;
-  else player.vx *= 0.996;
+  if(keys['KeyD']||keys['ArrowRight']) player.vx+=ACC;
+  if(keys['KeyA']||keys['ArrowLeft'])  player.vx-=ACC*0.65;
+  player.vx=Math.max(-MAXV*0.45,Math.min(MAXV,player.vx));
+  if(player.grounded) player.vx*=FRIC; else player.vx*=0.996;
 
-  if (keys['KeyW'] || keys['ArrowUp']) {
-    if (player.grounded || player.onRamp) {
-      player.angle -= WH_T;
-      player.wheelie = true;
-    }
-  } else {
-    player.wheelie = false;
-    if (player.grounded || player.onRamp) player.angle *= 0.87;
-    else player.angle *= 0.97;
+  if(keys['KeyW']||keys['ArrowUp']){
+    if(player.grounded||player.onRamp){player.angle-=WH_T;player.wheelie=true;}
+  }else{
+    player.wheelie=false;
+    if(player.grounded||player.onRamp) player.angle*=0.87;
+    else player.angle*=0.97;
   }
-  player.angle = Math.max(-MAX_WH, Math.min(0.12, player.angle));
+  player.angle=Math.max(-MAX_WH,Math.min(0.12,player.angle));
 
-  if (player.boostTimer > 0) {
-    player.boostTimer--;
-    player.vx = Math.min(player.vx + 0.42, MAXV + 4.2);
-  }
+  if(player.boostTimer>0){player.boostTimer--;player.vx=Math.min(player.vx+0.42,MAXV+4.2);}
 
-  player.vy += G;
-  if (player.vy > 15) player.vy = 15;
-  player.x += player.vx;
-  player.y += player.vy;
+  player.vy+=G;
+  if(player.vy>15) player.vy=15;
+  player.x+=player.vx;
+  player.y+=player.vy;
 
-  // colisão
-  player.grounded = false;
-  player.onRamp = false;
-  const fx = player.x + player.w * 0.40;
-  const fy = player.y + player.h;
-  let bestY = null, best = null;
+  // --- COLISÃO PISO ---
+  player.grounded=false;player.onRamp=false;
+  const fx=player.x+player.w*0.40;
+  const fy=player.y+player.h;
+  let bestY=null,best=null;
 
-  for (const seg of level) {
-    if (seg.type === 'obstacle') {
-      const enough = player.angle < -0.42;
-      if (!enough && fx > seg.x - 4 && fx < seg.x + seg.w + 4 &&
-          fy > seg.y - 6 && player.y + player.h * 0.45 < seg.y + seg.h + 8) {
-        player.vx *= 0.25;
-        player.x = seg.x - player.w * 0.42;
+  for(const seg of level){
+    if(seg.type==='obstacle'){
+      const enough=player.angle<-0.42;
+      if(!enough&&fx>seg.x-4&&fx<seg.x+seg.w+4&&fy>seg.y-6&&player.y+player.h*0.45<seg.y+seg.h+8){
+        player.vx*=0.25;player.x=seg.x-player.w*0.42;
       }
       continue;
     }
-    if (seg.type === 'finish' && state === 'playing') {
-      if (player.x + player.w * 0.5 > seg.x) { endPhase(); return; }
+    if(seg.type==='finish'&&state==='playing'){
+      if(player.x+player.w*0.5>seg.x){endPhase();return;}
       continue;
     }
-    if (fx < seg.x - 8 || fx > seg.x + (seg.w || 0) + 8) continue;
-    const sy = getSegY(seg, fx);
-    if (fy >= sy - 11 && player.y + player.h * 0.28 < sy + 38) {
-      if (bestY === null || sy < bestY) { bestY = sy; best = seg; }
+    // ignora ceiling e tunnelVis no piso
+    if(seg.type==='ceiling'||seg.type==='ceilingRamp'||seg.type==='tunnelVis') continue;
+
+    if(fx<seg.x-8||fx>seg.x+(seg.w||0)+8) continue;
+    const sy=getSegY(seg,fx);
+    if(fy>=sy-11&&player.y+player.h*0.28<sy+38){
+      if(bestY===null||sy<bestY){bestY=sy;best=seg;}
     }
   }
 
-  if (best && bestY !== null) {
-    if (player.vy >= -1.8 || fy >= bestY - 4) {
-      player.y = bestY - player.h;
-      player.vy = 0;
-      player.grounded = true;
-      if (best.type === 'boost') {
-        if (player.boostTimer <= 0) {
-          player.boostTimer = 26;
-          player.vy = -6.5;
-          player.grounded = false;
-        }
-      } else if (best.type === 'rampUp' || best.type === 'rampDown') {
-        player.onRamp = true;
-        const ra = Math.atan(getSlope(best));
-        if (!player.wheelie) player.angle = player.angle * 0.48 + ra * 0.52;
-      } else if (!player.wheelie) {
-        player.angle *= 0.76;
+  if(best&&bestY!==null){
+    if(player.vy>=-1.8||fy>=bestY-4){
+      player.y=bestY-player.h;
+      player.vy=0;
+      player.grounded=true;
+      if(best.type==='boost'){
+        if(player.boostTimer<=0){player.boostTimer=26;player.vy=-6.5;player.grounded=false;}
+      }else if(best.type==='rampUp'||best.type==='rampDown'){
+        player.onRamp=true;
+        const ra=Math.atan(getSlope(best));
+        if(!player.wheelie) player.angle=player.angle*0.48+ra*0.52;
+      }else if(!player.wheelie){
+        player.angle*=0.76;
+      }
+    }
+  }
+
+  // --- COLISÃO TETO (ceiling) ---
+  const headY=player.y+8; // topo aproximado da moto/piloto
+  for(const seg of level){
+    if(seg.type!=='ceiling'&&seg.type!=='ceilingRamp') continue;
+    if(fx<seg.x-4||fx>seg.x+seg.w+4) continue;
+    const cy=getCeilY(seg,fx);
+    if(cy===null) continue;
+    // se a cabeça está acima da parte de baixo do teto
+    if(headY<cy&&player.y+player.h>cy-clearanceSafe(seg)){
+      // empurra para baixo
+      if(player.y<cy-4){
+        player.y=cy-4;
+        if(player.vy<0) player.vy=0;
+        // impede wheelie extremo dentro de túnel baixo
+        if(player.angle<-0.55) player.angle=-0.55;
       }
     }
   }
 
   // gatos
-  for (const cat of cats) {
-    if (cat.collected) continue;
-    const cx = cat.x + 17;
-    const cy = cat.y + 17 + Math.sin(Date.now() / 200 + cat.bob) * 4;
-    if (Math.abs(player.x + 42 - cx) < 38 && Math.abs(player.y + 26 - cy) < 38) {
-      cat.collected = true;
+  for(const cat of cats){
+    if(cat.collected) continue;
+    const cx=cat.x+17,cy=cat.y+17+Math.sin(Date.now()/200+cat.bob)*4;
+    if(Math.abs(player.x+42-cx)<38&&Math.abs(player.y+26-cy)<38){
+      cat.collected=true;
       collected.add(cat.typeId);
       phaseCatsGot.add(cat.typeId);
-      localStorage.setItem('motoCats', JSON.stringify([...collected]));
-      document.getElementById('cats').textContent = phaseCatsGot.size;
+      localStorage.setItem('motoCats',JSON.stringify([...collected]));
+      document.getElementById('cats').textContent=phaseCatsGot.size;
     }
   }
 
-  if (player.y > H + 280) {
-    if (state === 'infinite') {
-      player.x = Math.max(100, player.x - 320);
-      player.y = 300; player.vx = 0; player.vy = 0;
-      player.angle = 0; player.boostTimer = 0;
-    } else {
-      player.x = 100; player.y = 300; player.vx = 0; player.vy = 0;
-      player.angle = 0; player.boostTimer = 0;
-      camX = 0; camY = 0;
+  if(player.y>H+280){
+    if(state==='infinite'){
+      player.x=Math.max(100,player.x-320);
+      player.y=300;player.vx=0;player.vy=0;player.angle=0;player.boostTimer=0;
+    }else{
+      player.x=100;player.y=300;player.vx=0;player.vy=0;player.angle=0;player.boostTimer=0;
+      camX=0;camY=0;
     }
   }
 
-  // câmera
-  const tcx = player.x - W * 0.27;
-  camX += (tcx - camX) * 0.10;
-  if (camX < 0) camX = 0;
-  const tcy = player.y - H * 0.52;
-  camY += (tcy - camY) * 0.07;
-  if (camY > 0) camY = 0;
-  if (camY < -140) camY = -140;
+  const tcx=player.x-W*0.27;
+  camX+=(tcx-camX)*0.10; if(camX<0) camX=0;
+  const tcy=player.y-H*0.52;
+  camY+=(tcy-camY)*0.07; if(camY>0) camY=0; if(camY<-140) camY=-140;
 
-  if (state === 'infinite') generateInfinite();
+  if(state==='infinite') generateInfinite();
 
-  document.getElementById('dist').textContent = Math.max(0, Math.floor((player.x - 100) / 10));
-  document.getElementById('timer').textContent = ((performance.now() - startTime) / 1000).toFixed(1);
-  if (state === 'infinite') document.getElementById('cats').textContent = collected.size;
+  document.getElementById('dist').textContent=Math.max(0,Math.floor((player.x-100)/10));
+  document.getElementById('timer').textContent=((performance.now()-startTime)/1000).toFixed(1);
+  if(state==='infinite') document.getElementById('cats').textContent=collected.size;
 }
 
-function endPhase() {
-  state = 'finish';
-  const t = ((performance.now() - startTime) / 1000).toFixed(1);
-  const key = 'p' + currentPhase;
-  let best = bestTimes[key];
-  if (!best || parseFloat(t) < parseFloat(best)) {
-    best = t;
-    bestTimes[key] = t;
-    localStorage.setItem('motoBest', JSON.stringify(bestTimes));
-  }
-  document.getElementById('fCats').textContent = phaseCatsGot.size + ' / ' + cats.length;
-  document.getElementById('fTime').textContent = t;
-  document.getElementById('fBest').textContent = best + 's';
+function clearanceSafe(seg){
+  // margem para não teleportar louco
+  return 80;
+}
+
+function endPhase(){
+  state='finish';
+  const t=((performance.now()-startTime)/1000).toFixed(1);
+  const key='p'+currentPhase;
+  let best=bestTimes[key];
+  if(!best||parseFloat(t)<parseFloat(best)){best=t;bestTimes[key]=t;localStorage.setItem('motoBest',JSON.stringify(bestTimes));}
+  document.getElementById('fCats').textContent=phaseCatsGot.size+' / '+cats.length;
+  document.getElementById('fTime').textContent=t;
+  document.getElementById('fBest').textContent=best+'s';
   document.getElementById('finishPanel').classList.add('open');
-  document.getElementById('btnNext').style.display = currentPhase < 10 ? 'inline-block' : 'none';
+  document.getElementById('btnNext').style.display=currentPhase<10?'inline-block':'none';
 }
 
-function drawBg() {
-  const night = currentPhase === 9 || (state === 'infinite' && Math.floor(camX / 2800) % 3 === 2);
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  if (night) { g.addColorStop(0, '#080814'); g.addColorStop(1, '#101028'); }
-  else { g.addColorStop(0, '#0f0c29'); g.addColorStop(0.5, '#302b63'); g.addColorStop(1, '#24243e'); }
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#fff';
-  for (let i = 0; i < 35; i++) {
-    const sx = ((i * 157 + camX * 0.06) % (W + 16)) - 8;
-    const sy = (i * 89) % (H * 0.4) + camY * 0.25;
-    ctx.globalAlpha = 0.18 + (i % 3) * 0.18;
-    ctx.fillRect(sx, sy, 2, 2);
+/* ========== DRAW ========== */
+function drawBg(){
+  const night=currentPhase===9||(state==='infinite'&&Math.floor(camX/2800)%3===2);
+  const g=ctx.createLinearGradient(0,0,0,H);
+  if(night){g.addColorStop(0,'#080814');g.addColorStop(1,'#101028');}
+  else{g.addColorStop(0,'#0f0c29');g.addColorStop(0.5,'#302b63');g.addColorStop(1,'#24243e');}
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#fff';
+  for(let i=0;i<35;i++){
+    const sx=((i*157+camX*0.06)%(W+16))-8;
+    const sy=(i*89)%(H*0.4)+camY*0.25;
+    ctx.globalAlpha=0.18+(i%3)*0.18;ctx.fillRect(sx,sy,2,2);
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha=1;
 }
 
-function drawSeg(seg) {
-  const sx = seg.x - camX;
-  const sy = seg.y - camY;
-  if (sx + (seg.w || 0) < -40 || sx > W + 40) return;
+function drawSeg(seg){
+  const sx=seg.x-camX, sy=seg.y-camY;
+  if(sx+(seg.w||0)<-40||sx>W+40) return;
 
-  if (seg.type === 'ground') {
-    ctx.fillStyle = '#2d3436';
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#00b894';
-    ctx.fillRect(sx, sy - 4, seg.w, 5);
-    ctx.fillStyle = '#636e72';
-    ctx.fillRect(sx, sy, seg.w, 3);
-  } else if (seg.type === 'platform') {
-    ctx.fillStyle = '#6c5ce7';
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#a29bfe';
-    ctx.fillRect(sx, sy, seg.w, 4);
-  } else if (seg.type === 'rampUp') {
+  if(seg.type==='ground'){
+    ctx.fillStyle='#2d3436';ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle='#00b894';ctx.fillRect(sx,sy-4,seg.w,5);
+    ctx.fillStyle='#636e72';ctx.fillRect(sx,sy,seg.w,3);
+  }
+  else if(seg.type==='platform'){
+    ctx.fillStyle='#6c5ce7';ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle='#a29bfe';ctx.fillRect(sx,sy,seg.w,4);
+  }
+  else if(seg.type==='rampUp'){
     ctx.beginPath();
-    ctx.moveTo(sx, sy + 4);
-    ctx.lineTo(sx + seg.w, sy - seg.h + 4);
-    ctx.lineTo(sx + seg.w, sy + 100);
-    ctx.lineTo(sx, sy + 100);
-    ctx.closePath();
-    ctx.fillStyle = '#2d3436';
-    ctx.fill();
+    ctx.moveTo(sx,sy+4);ctx.lineTo(sx+seg.w,sy-seg.h+4);
+    ctx.lineTo(sx+seg.w,sy+100);ctx.lineTo(sx,sy+100);ctx.closePath();
+    ctx.fillStyle='#2d3436';ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(sx + seg.w, sy - seg.h);
-    ctx.lineTo(sx + seg.w, sy - seg.h + 5);
-    ctx.lineTo(sx, sy + 5);
-    ctx.closePath();
-    ctx.fillStyle = '#00b894';
-    ctx.fill();
-  } else if (seg.type === 'rampDown') {
+    ctx.moveTo(sx,sy);ctx.lineTo(sx+seg.w,sy-seg.h);
+    ctx.lineTo(sx+seg.w,sy-seg.h+5);ctx.lineTo(sx,sy+5);ctx.closePath();
+    ctx.fillStyle='#00b894';ctx.fill();
+  }
+  else if(seg.type==='rampDown'){
     ctx.beginPath();
-    ctx.moveTo(sx, sy + 4);
-    ctx.lineTo(sx + seg.w, sy + seg.h + 4);
-    ctx.lineTo(sx + seg.w, sy + seg.h + 100);
-    ctx.lineTo(sx, sy + 100);
-    ctx.closePath();
-    ctx.fillStyle = '#2d3436';
-    ctx.fill();
+    ctx.moveTo(sx,sy+4);ctx.lineTo(sx+seg.w,sy+seg.h+4);
+    ctx.lineTo(sx+seg.w,sy+seg.h+100);ctx.lineTo(sx,sy+100);ctx.closePath();
+    ctx.fillStyle='#2d3436';ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(sx + seg.w, sy + seg.h);
-    ctx.lineTo(sx + seg.w, sy + seg.h + 5);
-    ctx.lineTo(sx, sy + 5);
+    ctx.moveTo(sx,sy);ctx.lineTo(sx+seg.w,sy+seg.h);
+    ctx.lineTo(sx+seg.w,sy+seg.h+5);ctx.lineTo(sx,sy+5);ctx.closePath();
+    ctx.fillStyle='#00b894';ctx.fill();
+  }
+  else if(seg.type==='boost'){
+    const p=0.5+Math.sin(Date.now()/95)*0.5;
+    ctx.fillStyle=`rgba(255,190,0,${p})`;ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle='#ff9f1a';ctx.fillRect(sx+2,sy+2,seg.w-4,seg.h-4);
+    ctx.fillStyle='#fff';ctx.font='bold 9px Courier New';ctx.fillText('BOOST',sx+5,sy+12);
+  }
+  else if(seg.type==='obstacle'){
+    ctx.fillStyle='#8B4513';ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle='#A0522D';ctx.fillRect(sx+2,sy+2,seg.w-4,seg.h-4);
+  }
+  else if(seg.type==='ceiling'){
+    // bloco de teto sólido
+    ctx.fillStyle='#1a1a1a';
+    ctx.fillRect(sx,sy-80,seg.w,seg.h+80); // estende para cima
+  }
+  else if(seg.type==='ceilingRamp'){
+    ctx.fillStyle='#1a1a1a';
+    ctx.beginPath();
+    if(seg.dir==='down'){
+      ctx.moveTo(sx,sy-80);
+      ctx.lineTo(sx+seg.w,sy+seg.h-80);
+      ctx.lineTo(sx+seg.w,sy+seg.h+28);
+      ctx.lineTo(sx,sy+28);
+    }else{
+      ctx.moveTo(sx,sy-80);
+      ctx.lineTo(sx+seg.w,sy-seg.h-80);
+      ctx.lineTo(sx+seg.w,sy-seg.h+28);
+      ctx.lineTo(sx,sy+28);
+    }
     ctx.closePath();
-    ctx.fillStyle = '#00b894';
     ctx.fill();
-  } else if (seg.type === 'boost') {
-    const p = 0.5 + Math.sin(Date.now() / 95) * 0.5;
-    ctx.fillStyle = `rgba(255,190,0,${p})`;
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#ff9f1a';
-    ctx.fillRect(sx + 2, sy + 2, seg.w - 4, seg.h - 4);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 9px Courier New';
-    ctx.fillText('BOOST', sx + 5, sy + 12);
-  } else if (seg.type === 'obstacle') {
-    ctx.fillStyle = '#8B4513';
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#A0522D';
-    ctx.fillRect(sx + 2, sy + 2, seg.w - 4, seg.h - 4);
-  } else if (seg.type === 'tunnel') {
-    ctx.fillStyle = '#141414';
-    ctx.fillRect(sx, sy - 15, seg.w, seg.h + 30);
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(sx, sy, seg.w, 6);
-    ctx.fillRect(sx, sy + seg.h - 6, seg.w, 6);
-    ctx.fillStyle = '#f1c40f';
-    for (let i = 40; i < seg.w; i += 65) ctx.fillRect(sx + i, sy + 10, 7, 5);
-  } else if (seg.type === 'finish') {
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(sx, sy, 10, seg.h);
-    ctx.fillStyle = '#e74c3c';
-    for (let i = 0; i < seg.h; i += 14) ctx.fillRect(sx, sy + i, 10, 7);
-    ctx.fillStyle = '#00ff88';
-    ctx.font = 'bold 11px Courier New';
-    ctx.fillText('CHEGADA', sx - 8, sy - 6);
+  }
+  else if(seg.type==='tunnelVis'){
+    // escurece o interior (já coberto pelo teto, só reforça atmosfera)
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.fillRect(sx,sy,seg.w,seg.h);
+    // luzes no teto
+    ctx.fillStyle='#f1c40f';
+    for(let i=50;i<seg.w;i+=70){
+      ctx.fillRect(sx+i,sy+8,6,4);
+    }
+  }
+  else if(seg.type==='finish'){
+    ctx.fillStyle='#fff';ctx.fillRect(sx,sy,10,seg.h);
+    ctx.fillStyle='#e74c3c';
+    for(let i=0;i<seg.h;i+=14) ctx.fillRect(sx,sy+i,10,7);
+    ctx.fillStyle='#00ff88';ctx.font='bold 11px Courier New';ctx.fillText('CHEGADA',sx-8,sy-6);
   }
 }
 
-function drawCats() {
-  for (const cat of cats) {
-    if (cat.collected) continue;
-    const sx = cat.x - camX;
-    const sy = cat.y - camY + Math.sin(Date.now() / 210 + cat.bob) * 4;
-    if (sx < -40 || sx > W + 40) continue;
-    drawCat(ctx, CAT_DATA[cat.typeId], 34, sx, sy);
+function drawCats(){
+  for(const cat of cats){
+    if(cat.collected) continue;
+    const sx=cat.x-camX,sy=cat.y-camY+Math.sin(Date.now()/210+cat.bob)*4;
+    if(sx<-40||sx>W+40) continue;
+    drawCat(ctx,CAT_DATA[cat.typeId],34,sx,sy);
   }
 }
 
-function drawPlayer() {
-  const px = player.x - camX;
-  const py = player.y - camY;
+function drawPlayer(){
+  const px=player.x-camX,py=player.y-camY;
   ctx.save();
-  ctx.translate(px + player.w * 0.38, py + player.h * 0.70);
+  ctx.translate(px+player.w*0.38,py+player.h*0.70);
   ctx.rotate(player.angle);
-  if (imgPlayer.complete && imgPlayer.naturalWidth > 0) {
-    ctx.drawImage(imgPlayer, -player.w * 0.38, -player.h * 0.70, player.w, player.h);
-  } else {
-    ctx.fillStyle = '#111'; ctx.fillRect(-26, -7, 20, 20);
-    ctx.fillStyle = '#555'; ctx.fillRect(-21, -2, 10, 10);
-    ctx.fillStyle = '#111'; ctx.fillRect(20, -7, 18, 18);
-    ctx.fillStyle = '#555'; ctx.fillRect(24, -2, 10, 10);
-    ctx.fillStyle = '#c0392b'; ctx.fillRect(-14, -16, 44, 14);
-    ctx.fillStyle = '#e74c3c'; ctx.fillRect(-3, -26, 26, 12);
-    ctx.fillStyle = '#2c3e50'; ctx.fillRect(20, -34, 5, 18);
-    ctx.fillRect(15, -36, 14, 5);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(0, -40, 14, 16);
-    ctx.fillStyle = '#f1c40f'; ctx.fillRect(1, -51, 12, 12);
-    ctx.fillStyle = '#2c3e50'; ctx.fillRect(3, -47, 7, 4);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(11, -34, 12, 5);
+  if(imgPlayer.complete&&imgPlayer.naturalWidth>0){
+    ctx.drawImage(imgPlayer,-player.w*0.38,-player.h*0.70,player.w,player.h);
+  }else{
+    ctx.fillStyle='#111';ctx.fillRect(-26,-7,20,20);
+    ctx.fillStyle='#555';ctx.fillRect(-21,-2,10,10);
+    ctx.fillStyle='#111';ctx.fillRect(20,-7,18,18);
+    ctx.fillStyle='#555';ctx.fillRect(24,-2,10,10);
+    ctx.fillStyle='#c0392b';ctx.fillRect(-14,-16,44,14);
+    ctx.fillStyle='#e74c3c';ctx.fillRect(-3,-26,26,12);
+    ctx.fillStyle='#2c3e50';ctx.fillRect(20,-34,5,18);ctx.fillRect(15,-36,14,5);
+    ctx.fillStyle='#3498db';ctx.fillRect(0,-40,14,16);
+    ctx.fillStyle='#f1c40f';ctx.fillRect(1,-51,12,12);
+    ctx.fillStyle='#2c3e50';ctx.fillRect(3,-47,7,4);
+    ctx.fillStyle='#3498db';ctx.fillRect(11,-34,12,5);
   }
   ctx.restore();
-  if (player.boostTimer > 0) {
-    ctx.fillStyle = 'rgba(255,180,0,.9)';
-    ctx.font = 'bold 11px Courier New';
-    ctx.fillText('BOOST!', px, py - 12);
-  }
-  if (player.wheelie) {
-    ctx.fillStyle = '#0f8';
-    ctx.font = '10px Courier New';
-    ctx.fillText('WHEELIE', px - 2, py - 26);
-  }
+  if(player.boostTimer>0){ctx.fillStyle='rgba(255,180,0,.9)';ctx.font='bold 11px Courier New';ctx.fillText('BOOST!',px,py-12);}
+  if(player.wheelie){ctx.fillStyle='#0f8';ctx.font='10px Courier New';ctx.fillText('WHEELIE',px-2,py-26);}
 }
 
-function draw() {
+function draw(){
   drawBg();
-  if (state === 'playing' || state === 'infinite') {
-    for (const s of level) drawSeg(s);
+  if(state==='playing'||state==='infinite'){
+    // desenha tetos primeiro (atrás), depois pisos, depois visual
+    for(const s of level) if(s.type==='ceiling'||s.type==='ceilingRamp') drawSeg(s);
+    for(const s of level) if(s.type!=='ceiling'&&s.type!=='ceilingRamp'&&s.type!=='tunnelVis') drawSeg(s);
+    for(const s of level) if(s.type==='tunnelVis') drawSeg(s);
     drawCats();
     drawPlayer();
   }
 }
 
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
+function loop(){update();draw();requestAnimationFrame(loop);}
 loop();
 </script>
 </body>
