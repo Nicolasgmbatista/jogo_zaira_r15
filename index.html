@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Moto Pixel R15</title>
+<title>Moto Pixel R15 – Motocross</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0a12;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Courier New',monospace;overflow:hidden;user-select:none}
@@ -12,16 +12,17 @@ canvas{image-rendering:pixelated;border:4px solid #222;max-width:100%;height:aut
 .panel.open{display:flex}
 .panel h1{color:#ff9ff3;font-size:32px;text-shadow:3px 3px 0 #000;margin-bottom:8px}
 .panel h2{color:#ff9ff3;font-size:22px;text-shadow:2px 2px 0 #000;margin-bottom:12px}
-.panel p{color:#aaa;font-size:13px;margin-bottom:14px;text-align:center}
+.panel p{color:#aaa;font-size:13px;margin-bottom:14px;text-align:center;max-width:420px;line-height:1.4}
 .btn{padding:12px 28px;margin:6px;background:#6c5ce7;color:#fff;border:3px solid #a29bfe;font-family:inherit;font-size:15px;cursor:pointer;min-width:180px}
 .btn:hover{background:#a29bfe;color:#111}
 .btn.sec{background:#2d3436;border-color:#636e72}
 .btn.sec:hover{background:#636e72;color:#fff}
-#phaseGrid{display:grid;grid-template-columns:repeat(5,88px);gap:8px;margin:12px 0 16px}
-.phaseBtn{width:88px;height:48px;background:#1e1e2e;border:3px solid #555;color:#ccc;font-family:inherit;font-size:13px;cursor:pointer}
+#phaseGrid{display:grid;grid-template-columns:repeat(5,90px);gap:10px;margin:12px 0 16px}
+.phaseBtn{width:90px;height:52px;background:#1e1e2e;border:3px solid #555;color:#ccc;font-family:inherit;font-size:12px;cursor:pointer;line-height:1.2}
 .phaseBtn:hover{border-color:#ff9ff3;color:#fff}
+.phaseBtn small{display:block;font-size:9px;color:#888}
 #hud{display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);color:#fff;text-align:center;pointer-events:none;text-shadow:2px 2px 0 #000;font-size:14px;line-height:1.4}
-#hint{display:none;position:absolute;bottom:8px;left:50%;transform:translateX(-50%);color:#777;font-size:12px;text-shadow:1px 1px 0 #000;pointer-events:none}
+#hint{display:none;position:absolute;bottom:8px;left:50%;transform:translateX(-50%);color:#777;font-size:11px;text-shadow:1px 1px 0 #000;pointer-events:none}
 #collectionGrid{display:grid;grid-template-columns:repeat(5,76px);gap:8px;max-height:280px;overflow-y:auto;padding:6px;margin-bottom:12px}
 .catCard{width:76px;background:#1a1a28;border:3px solid #444;padding:4px;text-align:center;cursor:pointer}
 .catCard.got{border-color:#ff9ff3}
@@ -39,41 +40,33 @@ canvas{image-rendering:pixelated;border:4px solid #222;max-width:100%;height:aut
 </head>
 <body>
 <canvas id="c" width="960" height="540"></canvas>
-
-<div id="hud">
-  <span id="hudPhase">FASE 1</span> | DIST <span id="dist">0</span>m | GATOS <span id="cats">0</span>/<span id="catsTotal">0</span> | TEMPO <span id="timer">0</span>s
-  <br>[M] Menu
-</div>
-<div id="hint">A / D = mover &nbsp;|&nbsp; W = empinar (passar obstáculos) &nbsp;|&nbsp; Rampa = salto</div>
+<div id="hud"><span id="hudPhase">FASE 1</span> | DIST <span id="dist">0</span>m | GATOS <span id="cats">0</span>/<span id="catsTotal">0</span> | TEMPO <span id="timer">0</span>s<br>[M] Menu</div>
+<div id="hint">A/D mover · W empinar (obstáculos) · Rampa = salto com impulso</div>
 
 <div id="mainMenu" class="panel open">
   <h1>MOTO PIXEL R15</h1>
-  <p>Sua namorada na Yamaha R15 · Resgate gatinhos</p>
+  <p>Motocross 2D · Pistas construídas · Gatinhos colecionáveis</p>
   <button class="btn" id="btnJogar">JOGAR</button>
   <button class="btn sec" id="btnInfinita">PISTA INFINITA</button>
   <button class="btn sec" id="btnColecao">COLEÇÃO</button>
 </div>
-
 <div id="phaseMenu" class="panel">
   <h2>Selecionar Fase</h2>
   <div id="phaseGrid"></div>
   <button class="btn sec" id="btnVoltarFases">VOLTAR</button>
 </div>
-
 <div id="colMenu" class="panel">
   <h2>Coleção de Gatinhos</h2>
   <p id="colCount">0 coletados</p>
   <div id="collectionGrid"></div>
   <button class="btn sec" id="btnVoltarCol">VOLTAR</button>
 </div>
-
 <div id="detail">
   <h3 id="dName"></h3>
   <canvas id="dSwatch" width="64" height="64"></canvas>
   <p id="dDesc"></p>
   <button class="btn sec" id="btnCloseDetail" style="min-width:100px;padding:6px 16px">Fechar</button>
 </div>
-
 <div id="finishPanel">
   <h2>FASE CONCLUÍDA!</h2>
   <div class="stat">Gatinhos: <span id="fCats">0</span></div>
@@ -89,954 +82,640 @@ canvas{image-rendering:pixelated;border:4px solid #222;max-width:100%;height:aut
 <script>
 (function(){
 "use strict";
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+ctx.imageSmoothingEnabled=false;
+const W=960,H=540;
+const imgPlayer=new Image(); imgPlayer.src='img/player.png';
 
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-ctx.imageSmoothingEnabled = false;
-const W = 960, H = 540;
-
-const imgPlayer = new Image();
-imgPlayer.src = 'img/player.png';
-
-const CAT_DATA = [
-  {name:"Carvão",colors:["#1a1a1a","#333"],mix:0,desc:"Preto puro. Dorme 18h e acorda cansado."},
-  {name:"Neve",colors:["#f5f5f5","#ddd"],mix:0,desc:"Branco total. Miado quase inaudível."},
-  {name:"Laranja",colors:["#e67e22","#d35400"],mix:0,desc:"Clássico. Perde-se em caixas."},
+const CAT_DATA=[
+  {name:"Carvão",colors:["#1a1a1a","#333"],mix:0,desc:"Preto puro. Dorme 18h."},
+  {name:"Neve",colors:["#f5f5f5","#ddd"],mix:0,desc:"Branco total."},
+  {name:"Laranja",colors:["#e67e22","#d35400"],mix:0,desc:"Clássico."},
   {name:"Cinza",colors:["#7f8c8d","#95a5a6"],mix:0,desc:"Camuflagem no sofá."},
-  {name:"Chocolate",colors:["#6d4c41","#4e342e"],mix:0,desc:"Odeia água, ama torneira."},
-  {name:"Creme",colors:["#f5e6c8","#e8d5a3"],mix:0,desc:"Derrete ao sol das 15h."},
-  {name:"Tigrado",colors:["#e67e22","#2c3e50"],mix:1,desc:"Rápido até ver um laser."},
-  {name:"Calico",colors:["#e74c3c","#f5f5f5","#2c3e50"],mix:1,desc:"Tricolor e rainha da casa."},
-  {name:"Siamês",colors:["#f5e6c8","#4a3728"],mix:1,desc:"Nunca para de conversar."},
+  {name:"Chocolate",colors:["#6d4c41","#4e342e"],mix:0,desc:"Odeia água."},
+  {name:"Creme",colors:["#f5e6c8","#e8d5a3"],mix:0,desc:"Derrete ao sol."},
+  {name:"Tigrado",colors:["#e67e22","#2c3e50"],mix:1,desc:"Rápido até ver laser."},
+  {name:"Calico",colors:["#e74c3c","#f5f5f5","#2c3e50"],mix:1,desc:"Rainha da casa."},
+  {name:"Siamês",colors:["#f5e6c8","#4a3728"],mix:1,desc:"Conversador nato."},
   {name:"Fumaça",colors:["#bdc3c7","#2c3e50"],mix:1,desc:"Aparece e some."},
   {name:"Dourado",colors:["#f1c40f","#e67e22"],mix:1,desc:"Acha que é o sol."},
-  {name:"Azul-Russo",colors:["#5d6d7e","#85929e"],mix:0,desc:"Elegante e carinhoso."},
-  {name:"Rosa",colors:["#ff9ff3","#feca57"],mix:1,desc:"Só existe aqui e no seu coração."},
+  {name:"Azul-Russo",colors:["#5d6d7e","#85929e"],mix:0,desc:"Elegante."},
+  {name:"Rosa",colors:["#ff9ff3","#feca57"],mix:1,desc:"Só neste jogo."},
   {name:"Menta",colors:["#1dd1a1","#10ac84"],mix:0,desc:"Adora plantas."},
-  {name:"Céu",colors:["#54a0ff","#2e86de"],mix:0,desc:"Julga os pássaros."},
-  {name:"Uva",colors:["#5f27cd","#341f97"],mix:0,desc:"Some às 3 da manhã."},
+  {name:"Céu",colors:["#54a0ff","#2e86de"],mix:0,desc:"Julga pássaros."},
+  {name:"Uva",colors:["#5f27cd","#341f97"],mix:0,desc:"Some de madrugada."},
   {name:"Arco-Íris",colors:["#ff6b6b","#feca57","#1dd1a1","#54a0ff"],mix:1,desc:"Sorte e pelos."},
-  {name:"Sombra",colors:["#2c3e50","#1a1a2e"],mix:1,desc:"Só aparece quando quer."},
-  {name:"Pêssego",colors:["#ff9f43","#feca57"],mix:1,desc:"Derrete no colo em 4s."},
-  {name:"Prata",colors:["#dfe6e9","#b2bec3"],mix:0,desc:"Vaidoso e brilhante."}
+  {name:"Sombra",colors:["#2c3e50","#1a1a2e"],mix:1,desc:"Só quando quer."},
+  {name:"Pêssego",colors:["#ff9f43","#feca57"],mix:1,desc:"Derrete no colo."},
+  {name:"Prata",colors:["#dfe6e9","#b2bec3"],mix:0,desc:"Vaidoso."}
 ];
 
-let state = 'menu';
-let currentPhase = 0;
-let collected = new Set(JSON.parse(localStorage.getItem('motoCats') || '[]'));
-let bestTimes = JSON.parse(localStorage.getItem('motoBest') || '{}');
-let phaseCatsGot = new Set();
-let startTime = 0;
+const PHASE_NAMES=["","Primeiro Desafio","Rampas","Subterrâneo","Velocidade","Altura","Obstáculos","Floresta","Industrial","Noite","Grande Desafio"];
 
-const player = {
-  x: 120, y: 360, vx: 0, vy: 0,
-  w: 84, h: 52, angle: 0,
-  grounded: false, onRamp: false, wheelie: false,
-  boostTimer: 0, airSustain: 0
-};
-let camX = 0, camY = 0;
-let impactFx = 0;
+let state='menu', currentPhase=0;
+let collected=new Set(JSON.parse(localStorage.getItem('motoCats')||'[]'));
+let bestTimes=JSON.parse(localStorage.getItem('motoBest')||'{}');
+let phaseCatsGot=new Set();
+let startTime=0;
 
-const G = 0.42;
-const MAXV = 9.2;
-const ACC = 0.28;
-const FRIC = 0.94;
-const WH_T = 0.09;
-const MAX_WH = 1.1;
-const SUSTAIN_FRAMES = 22;
-const SUSTAIN_G = 0.22;
+const player={x:120,y:360,vx:0,vy:0,w:84,h:52,angle:0,grounded:false,onRamp:false,wheelie:false,boostTimer:0,airSustain:0};
+let camX=0,camY=0,impactFx=0;
 
-const JUMP = {
-  easy:   { rw: 135, rh: 88,  gap: 95  },
-  medium: { rw: 160, rh: 108, gap: 135 },
-  big:    { rw: 195, rh: 132, gap: 220 }
+const G=0.42, MAXV=9.2, ACC=0.28, FRIC=0.94, WH_T=0.09, MAX_WH=1.1;
+const SUSTAIN_FRAMES=24, SUSTAIN_G=0.20;
+
+const JUMP={
+  easy:   {rw:140, rh:90,  gap:100},
+  medium: {rw:165, rh:112, gap:140},
+  big:    {rw:200, rh:135, gap:230}
 };
 
-let level = [];
-let cats = [];
+let level=[], cats=[];
 
-/* ===================== BUILDER ===================== */
-class Builder {
-  constructor() {
-    this.segs = [];
-    this.cats = [];
-    this.cx = 0;
-    this.cy = 420;
-    this.finishX = 0;
-  }
-  flat(w) {
-    this.segs.push({ type: 'ground', x: this.cx, y: this.cy, w: w, h: 160 });
-    this.cx += w;
+/* ========== BUILDER ========== */
+class Builder{
+  constructor(){this.segs=[];this.cats=[];this.cx=0;this.cy=420;this.finishX=0;}
+  flat(w){this.segs.push({type:'ground',x:this.cx,y:this.cy,w:w,h:160});this.cx+=w;return this;}
+  up(w,rise){rise=Math.min(rise,145);this.segs.push({type:'rampUp',x:this.cx,y:this.cy,w:w,h:rise});this.cx+=w;this.cy-=rise;return this;}
+  down(w,drop){drop=Math.min(drop,145);this.segs.push({type:'rampDown',x:this.cx,y:this.cy,w:w,h:drop});this.cx+=w;this.cy+=drop;return this;}
+  obs(ow,oh){
+    ow=ow||26; oh=oh||15;
+    this.segs.push({type:'obstacle',x:this.cx-55,y:this.cy-oh,w:ow,h:oh,groundY:this.cy});
     return this;
   }
-  up(w, rise) {
-    rise = Math.min(rise, 140);
-    this.segs.push({ type: 'rampUp', x: this.cx, y: this.cy, w: w, h: rise });
-    this.cx += w;
-    this.cy -= rise;
-    return this;
+  boost(){this.segs.push({type:'boost',x:this.cx-18,y:this.cy-18,w:92,h:16});return this;}
+  jump(k){
+    const J=JUMP[k]||JUMP.easy;
+    this.segs.push({type:'rampUp',x:this.cx,y:this.cy,w:J.rw,h:J.rh});
+    if(k==='big') this.segs.push({type:'boost',x:this.cx+J.rw*0.4,y:this.cy-J.rh+4,w:92,h:16});
+    this.cx+=J.rw+J.gap;
+    this.cy-=J.rh;
+    this.segs.push({type:'ground',x:this.cx,y:this.cy,w:260,h:160});
+    this.cx+=260; return this;
   }
-  down(w, drop) {
-    drop = Math.min(drop, 140);
-    this.segs.push({ type: 'rampDown', x: this.cx, y: this.cy, w: w, h: drop });
-    this.cx += w;
-    this.cy += drop;
-    return this;
+  plat(w,rise){this.up(110,rise);this.segs.push({type:'platform',x:this.cx,y:this.cy,w:w,h:24});this.cx+=w;this.down(110,rise);return this;}
+  tunDown(len,drop){
+    drop=Math.min(drop,125); len=Math.max(240,len);
+    const sy=this.cy, cy=sy-118;
+    this.segs.push({type:'rampDown',x:this.cx,y:sy,w:len,h:drop});
+    this.segs.push({type:'ceilingRamp',x:this.cx,y:cy,w:len,h:drop,dir:'down'});
+    this.segs.push({type:'tunnelVis',x:this.cx,y:cy,w:len,h:118+drop});
+    this.cx+=len; this.cy=sy+drop; return this;
   }
-  obstacle() {
-    const ow = 24 + Math.floor(Math.random() * 8);
-    const oh = 14 + Math.floor(Math.random() * 5);
-    const ox = this.cx - 60;
-    // y = superfície - altura → fica EM CIMA do chão
-    this.segs.push({
-      type: 'obstacle',
-      x: ox,
-      y: this.cy - oh,
-      w: ow,
-      h: oh,
-      groundY: this.cy
-    });
-    return this;
+  tunUp(len,rise){
+    rise=Math.min(rise,125); len=Math.max(240,len);
+    const sy=this.cy, cy=sy-118;
+    this.segs.push({type:'rampUp',x:this.cx,y:sy,w:len,h:rise});
+    this.segs.push({type:'ceilingRamp',x:this.cx,y:cy,w:len,h:rise,dir:'up'});
+    this.segs.push({type:'tunnelVis',x:this.cx,y:sy-rise-118,w:len,h:118+rise});
+    this.cx+=len; this.cy=sy-rise; return this;
   }
-  boost() {
-    this.segs.push({ type: 'boost', x: this.cx - 20, y: this.cy - 18, w: 90, h: 16 });
-    return this;
-  }
-  jump(kind) {
-    const J = JUMP[kind] || JUMP.easy;
-    const withBoost = (kind === 'big');
-    this.segs.push({ type: 'rampUp', x: this.cx, y: this.cy, w: J.rw, h: J.rh });
-    if (withBoost) {
-      this.segs.push({ type: 'boost', x: this.cx + J.rw * 0.4, y: this.cy - J.rh + 4, w: 90, h: 16 });
-    }
-    this.cx += J.rw;
-    this.cx += J.gap;
-    this.cy -= J.rh;
-    this.segs.push({ type: 'ground', x: this.cx, y: this.cy, w: 250, h: 160 });
-    this.cx += 250;
-    return this;
-  }
-  platform(w, rise) {
-    this.up(115, rise);
-    this.segs.push({ type: 'platform', x: this.cx, y: this.cy, w: w, h: 24 });
-    this.cx += w;
-    this.down(115, rise);
-    return this;
-  }
-  tunnelDown(len, drop) {
-    drop = Math.min(drop, 120);
-    len = Math.max(250, len);
-    const startY = this.cy;
-    const ceilY = startY - 115;
-    this.segs.push({ type: 'rampDown', x: this.cx, y: startY, w: len, h: drop });
-    this.segs.push({ type: 'ceilingRamp', x: this.cx, y: ceilY, w: len, h: drop, dir: 'down' });
-    this.segs.push({ type: 'tunnelVis', x: this.cx, y: ceilY, w: len, h: 115 + drop });
-    this.cx += len;
-    this.cy = startY + drop;
-    return this;
-  }
-  tunnelUp(len, rise) {
-    rise = Math.min(rise, 120);
-    len = Math.max(250, len);
-    const startY = this.cy;
-    const ceilY = startY - 115;
-    this.segs.push({ type: 'rampUp', x: this.cx, y: startY, w: len, h: rise });
-    this.segs.push({ type: 'ceilingRamp', x: this.cx, y: ceilY, w: len, h: rise, dir: 'up' });
-    this.segs.push({ type: 'tunnelVis', x: this.cx, y: startY - rise - 115, w: len, h: 115 + rise });
-    this.cx += len;
-    this.cy = startY - rise;
-    return this;
-  }
-  cat(id) {
-    this.cats.push({
-      x: this.cx - 50,
-      y: this.cy - 42,
-      w: 32, h: 32,
-      typeId: id % CAT_DATA.length,
-      collected: false,
-      bob: Math.random() * 6
-    });
-    return this;
-  }
-  finish() {
-    this.segs.push({ type: 'finish', x: this.cx, y: this.cy - 50, w: 40, h: 90 });
-    this.finishX = this.cx + 20;
-    this.flat(200);
-    return this;
-  }
-  build() {
-    return { level: this.segs, cats: this.cats, finishX: this.finishX };
-  }
+  cat(id,oy){this.cats.push({x:this.cx-48,y:this.cy+(oy|| -40),w:32,h:32,typeId:id%20,collected:false,bob:Math.random()*6});return this;}
+  finish(){this.segs.push({type:'finish',x:this.cx,y:this.cy-50,w:40,h:90});this.finishX=this.cx+20;this.flat(200);return this;}
+  build(){return{level:this.segs,cats:this.cats,finishX:this.finishX};}
 }
 
-function makePhase(id) {
-  const B = new Builder();
-  let t = (id - 1) * 2;
+/* ========== 10 FASES – DESIGN MOTOCROSS ========== */
+function makePhase(id){
+  const B=new Builder();
+  let t=(id-1)*2;
 
-  if (id === 1) {
-    B.flat(380).obstacle().flat(160).cat(t++)
-     .up(130, 70).flat(170).obstacle().flat(110)
+  if(id===1){ // PRIMEIRO DESAFIO
+    B.flat(320)
+     .down(140,45)
+     .flat(100).obs().flat(80)
+     .up(130,75).flat(100)
      .jump('easy')
-     .flat(150).cat(t++).flat(130).obstacle().flat(100)
-     .finish();
-  } else if (id === 2) {
-    B.flat(320).obstacle().obstacle().flat(150)
-     .up(120, 65).flat(140).cat(t++)
-     .down(110, 65).flat(170)
-     .jump('easy')
-     .flat(130).obstacle().flat(120).cat(t++)
-     .platform(140, 80).cat(t++)
-     .flat(140).finish();
-  } else if (id === 3) {
-    B.flat(300).obstacle().flat(130)
-     .up(125, 75).flat(140).cat(t++)
-     .down(80, 35)
-     .tunnelDown(280, 65)
-     .obstacle().cat(t++).flat(150)
-     .jump('easy')
-     .flat(140).cat(t++).flat(120).finish();
-  } else if (id === 4) {
-    B.flat(260)
-     .down(160, 55).flat(90)
-     .jump('medium')
-     .flat(150).cat(t++).obstacle().flat(140)
-     .down(130, 40).flat(70)
-     .jump('medium')
-     .flat(140).cat(t++).obstacle().obstacle().flat(120)
-     .cat(t++).flat(100).finish();
-  } else if (id === 5) {
-    B.flat(240)
-     .up(145, 110).flat(160).cat(t++)
-     .platform(150, 60).cat(t++)
-     .down(120, 80).flat(140).obstacle().flat(120)
-     .up(135, 90).flat(130).cat(t++)
-     .down(120, 90).flat(160).finish();
-  } else if (id === 6) {
-    B.flat(220).obstacle().obstacle().flat(120)
-     .up(125, 80).flat(110)
-     .tunnelDown(260, 70)
-     .obstacle().cat(t++).flat(140)
-     .down(110, 35).flat(50)
-     .jump('medium')
-     .flat(130).cat(t++)
-     .platform(140, 75).cat(t++)
-     .flat(130).finish();
-  } else if (id === 7) {
-    B.flat(280).obstacle().obstacle().flat(160)
-     .up(135, 80).flat(120).cat(t++)
-     .down(110, 60).flat(170)
-     .obstacle().obstacle().flat(140)
-     .jump('medium')
-     .flat(140).cat(t++)
-     .platform(130, 70).cat(t++)
-     .flat(130).obstacle().flat(110).finish();
-  } else if (id === 8) {
-    B.flat(240).obstacle().flat(130)
-     .tunnelDown(300, 80)
-     .obstacle().obstacle().cat(t++).flat(150)
-     .down(90, 30).flat(40)
-     .jump('medium')
-     .flat(140).cat(t++)
-     .platform(150, 85).cat(t++)
-     .down(120, 70).flat(140)
-     .obstacle().flat(120).finish();
-  } else if (id === 9) {
-    B.flat(260).obstacle().flat(140)
-     .up(135, 85).flat(140)
-     .tunnelDown(280, 75)
-     .obstacle().obstacle().cat(t++).flat(140)
-     .tunnelUp(260, 65)
-     .flat(130).cat(t++)
-     .down(120, 40).flat(50)
-     .jump('medium')
-     .flat(130).cat(t++)
-     .platform(140, 90).flat(140)
-     .obstacle().obstacle().flat(120).finish();
-  } else {
-    B.flat(200).obstacle().obstacle().obstacle().flat(120)
-     .up(125, 80).flat(100)
-     .tunnelDown(260, 75)
-     .obstacle().cat(t++).flat(130)
-     .down(120, 45).boost()
-     .jump('big')
      .flat(120).cat(t++)
-     .platform(150, 90).cat(t++)
-     .down(120, 80).flat(140)
-     .obstacle().obstacle().flat(120)
-     .tunnelUp(240, 60)
+     .up(120,60).flat(140)
+     .jump('easy')
+     .flat(100).cat(t++)
+     .flat(120).finish();
+  }
+  else if(id===2){ // RAMPAS
+    B.flat(280).obs().flat(90)
+     .jump('easy')
+     .flat(80)
+     .plat(160,70).cat(t++)
+     .down(130,55).flat(100)
      .jump('medium')
-     .flat(130).cat(t++).flat(110).finish();
+     .flat(100).obs().flat(70)
+     .up(150,95).flat(80).cat(t++)
+     .jump('medium')
+     .flat(120).cat(t++)
+     .flat(100).finish();
+  }
+  else if(id===3){ // SUBTERRÂNEO
+    B.flat(260)
+     .down(160,55).flat(60)
+     .tunDown(300,80)
+     .flat(80).cat(t++).obs().flat(100)
+     .tunUp(280,75)
+     .flat(100)
+     .jump('easy')
+     .flat(90).obs().obs().flat(80)
+     .cat(t++).flat(100)
+     .jump('medium')
+     .flat(110).cat(t++).finish();
+  }
+  else if(id===4){ // VELOCIDADE
+    B.flat(220)
+     .down(200,70).boost().flat(50)
+     .obs().obs().flat(60)
+     .jump('medium')
+     .flat(120).cat(t++)
+     .down(160,50).boost().flat(40)
+     .jump('big')
+     .flat(130).cat(t++)
+     .obs().flat(80)
+     .jump('medium')
+     .flat(100).cat(t++).finish();
+  }
+  else if(id===5){ // ALTURA
+    B.flat(240)
+     .up(160,120).flat(140).cat(t++,-38)
+     .plat(150,55).cat(t++)
+     .down(100,40)
+     .tunDown(260,70)
+     .flat(90).obs().flat(80)
+     .jump('medium')
+     .flat(100)
+     .plat(140,80).cat(t++)
+     .up(130,70).flat(120)
+     .finish();
+  }
+  else if(id===6){ // SEQUÊNCIA DE OBSTÁCULOS
+    B.flat(250).obs().obs().flat(70).obs(30,18).flat(90)
+     .down(140,50).flat(60)
+     .jump('easy')
+     .flat(100).obs().flat(70)
+     .tunDown(240,65)
+     .obs().flat(80).cat(t++)
+     .tunUp(230,60)
+     .flat(90).obs().obs().flat(70)
+     .jump('medium')
+     .flat(110).cat(t++).cat(t++).finish();
+  }
+  else if(id===7){ // FLORESTA
+    B.flat(280)
+     .down(150,50).flat(70)
+     .obs(28,16).obs(32,18).flat(80)
+     .jump('easy')
+     .flat(90)
+     .tunDown(280,75)
+     .flat(70).cat(t++).obs(30,17).flat(90)
+     .tunUp(260,70)
+     .flat(100)
+     .plat(150,75).cat(t++)
+     .down(180,80).flat(50)
+     .jump('medium')
+     .flat(120).cat(t++).finish();
+  }
+  else if(id===8){ // INDUSTRIAL
+    B.flat(230)
+     .up(140,90).flat(100)
+     .plat(160,50).cat(t++)
+     .down(120,60).flat(70)
+     .obs(34,20).flat(60)
+     .tunDown(300,85)
+     .obs(28,16).obs(30,18).flat(80).cat(t++)
+     .tunUp(270,70)
+     .flat(90)
+     .jump('medium')
+     .flat(110).cat(t++)
+     .obs(32,19).flat(80)
+     .jump('medium')
+     .flat(100).finish();
+  }
+  else if(id===9){ // NOITE
+    B.flat(240)
+     .down(180,60).flat(50)
+     .obs().obs().flat(60)
+     .jump('medium')
+     .flat(100)
+     .tunDown(320,90)
+     .obs().flat(70).cat(t++).obs().flat(80)
+     .tunUp(280,80)
+     .flat(90).cat(t++)
+     .down(150,45).boost().flat(40)
+     .jump('big')
+     .flat(120)
+     .plat(140,85).cat(t++)
+     .down(130,70).flat(80)
+     .obs().obs().obs().flat(70)
+     .jump('medium')
+     .flat(100).finish();
+  }
+  else{ // FASE 10 – GRANDE DESAFIO
+    B.flat(200)
+     .down(160,55).flat(50)
+     .obs().obs().flat(60)
+     .boost().flat(30)
+     .jump('medium')
+     .flat(100).cat(t++)
+     .tunDown(280,80)
+     .flat(60)
+     .tunUp(250,70)
+     .flat(90)
+     .plat(160,90).cat(t++)
+     .down(140,60).flat(50)
+     .obs().obs().obs().flat(70)
+     .jump('medium')
+     .flat(110).cat(t++)
+     .down(200,75).boost().flat(40)
+     .jump('big')
+     .flat(130).cat(t++)
+     .obs().flat(80)
+     .jump('medium')
+     .flat(120).finish();
   }
   return B.build();
 }
 
-/* ===================== INFINITO ===================== */
-let infB = null;
-const TEMPLATES = [
-  function(b){ b.flat(280+Math.random()*140).obstacle().flat(60); },
-  function(b){ b.flat(240).obstacle().obstacle().flat(80); },
-  function(b){ b.up(120+Math.random()*30, 60+Math.random()*30).flat(140); },
-  function(b){ b.down(130+Math.random()*30, 45+Math.random()*25).flat(150); },
-  function(b){ b.jump('easy'); },
-  function(b){ b.down(100, 35).flat(40).jump('medium'); },
-  function(b){ b.tunnelDown(250+Math.random()*50, 60+Math.random()*20).flat(80); },
-  function(b){ b.tunnelUp(240+Math.random()*40, 55+Math.random()*20).flat(80); },
-  function(b){ b.platform(120+Math.random()*40, 65+Math.random()*25).flat(60); },
-  function(b){ b.flat(150).obstacle().up(110, 60).flat(100).obstacle().flat(60); }
+/* ========== INFINITO ========== */
+let infB=null;
+const TPL=[
+  function(b){b.flat(260+Math.random()*120).obs().flat(50);},
+  function(b){b.flat(220).obs().obs().flat(70);},
+  function(b){b.up(115+Math.random()*30,55+Math.random()*30).flat(130);},
+  function(b){b.down(125+Math.random()*30,40+Math.random()*25).flat(140);},
+  function(b){b.jump('easy');},
+  function(b){b.down(95,30).flat(35).jump('medium');},
+  function(b){b.tunDown(240+Math.random()*50,55+Math.random()*25).flat(70);},
+  function(b){b.tunUp(230+Math.random()*40,50+Math.random()*20).flat(70);},
+  function(b){b.plat(115+Math.random()*35,60+Math.random()*25).flat(55);},
+  function(b){b.flat(140).obs().up(105,55).flat(90).obs().flat(55);}
 ];
-
-function resetInfinite() {
-  infB = new Builder();
-  infB.flat(450);
-  for (let i = 0; i < 6; i++) {
-    TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)](infB);
-    if (Math.random() > 0.5) infB.cat(Math.floor(Math.random() * CAT_DATA.length));
+function resetInfinite(){
+  infB=new Builder(); infB.flat(420);
+  for(let i=0;i<6;i++){TPL[Math.floor(Math.random()*TPL.length)](infB); if(Math.random()>0.5)infB.cat(Math.floor(Math.random()*20));}
+  level=infB.segs; cats=infB.cats;
+  player.x=120;player.y=360;player.vx=0;player.vy=0;player.angle=0;player.boostTimer=0;player.airSustain=0;
+  camX=0;camY=0;phaseCatsGot=new Set();
+}
+function generateInfinite(){
+  if(!infB)return;
+  while(infB.cx<camX+W+900){
+    TPL[Math.floor(Math.random()*TPL.length)](infB);
+    if(Math.random()>0.55)infB.cat(Math.floor(Math.random()*20));
   }
-  level = infB.segs;
-  cats = infB.cats;
-  player.x = 120; player.y = 360; player.vx = 0; player.vy = 0;
-  player.angle = 0; player.boostTimer = 0; player.airSustain = 0;
-  camX = 0; camY = 0;
-  phaseCatsGot = new Set();
+  level=infB.segs; cats=infB.cats;
+  const mx=camX-500;
+  while(level.length&&level[0].x+(level[0].w||0)<mx)level.shift();
+  while(cats.length&&cats[0].x<mx)cats.shift();
 }
 
-function generateInfinite() {
-  if (!infB) return;
-  while (infB.cx < camX + W + 900) {
-    TEMPLATES[Math.floor(Math.random() * TEMPLATES.length)](infB);
-    if (Math.random() > 0.55) infB.cat(Math.floor(Math.random() * CAT_DATA.length));
-  }
-  level = infB.segs;
-  cats = infB.cats;
-  const minX = camX - 500;
-  while (level.length && level[0].x + (level[0].w || 0) < minX) level.shift();
-  while (cats.length && cats[0].x < minX) cats.shift();
-}
-
-/* ===================== HELPERS ===================== */
-function getFloorY(seg, px) {
-  if (seg.type === 'ground' || seg.type === 'platform' || seg.type === 'boost' || seg.type === 'finish') {
-    return seg.y;
-  }
-  if (seg.type === 'rampUp') {
-    const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
-    return seg.y - t * seg.h;
-  }
-  if (seg.type === 'rampDown') {
-    const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
-    return seg.y + t * seg.h;
-  }
+/* ========== HELPERS ========== */
+function getFloorY(seg,px){
+  if(seg.type==='ground'||seg.type==='platform'||seg.type==='boost'||seg.type==='finish')return seg.y;
+  if(seg.type==='rampUp'){const t=Math.max(0,Math.min(1,(px-seg.x)/seg.w));return seg.y-t*seg.h;}
+  if(seg.type==='rampDown'){const t=Math.max(0,Math.min(1,(px-seg.x)/seg.w));return seg.y+t*seg.h;}
   return null;
 }
-
-function getCeilY(seg, px) {
-  if (seg.type === 'ceilingRamp') {
-    const t = Math.max(0, Math.min(1, (px - seg.x) / seg.w));
-    if (seg.dir === 'down') return seg.y + t * seg.h + 26;
-    return seg.y - t * seg.h + 26;
-  }
-  return null;
+function getCeilY(seg,px){
+  if(seg.type!=='ceilingRamp')return null;
+  const t=Math.max(0,Math.min(1,(px-seg.x)/seg.w));
+  return seg.dir==='down'?seg.y+t*seg.h+26:seg.y-t*seg.h+26;
 }
-
-function getSlope(seg) {
-  if (seg.type === 'rampUp') return -seg.h / seg.w;
-  if (seg.type === 'rampDown') return seg.h / seg.w;
+function getSlope(seg){
+  if(seg.type==='rampUp')return -seg.h/seg.w;
+  if(seg.type==='rampDown')return seg.h/seg.w;
   return 0;
 }
 
-/* ===================== INPUT ===================== */
-const keys = {};
-window.addEventListener('keydown', function(e) {
-  keys[e.code] = true;
-  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
-  if (e.code === 'KeyM' || e.code === 'Escape') {
-    if (state === 'playing' || state === 'infinite') openMain();
-  }
+/* ========== INPUT / MENUS ========== */
+const keys={};
+window.addEventListener('keydown',function(e){
+  keys[e.code]=true;
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.code)>=0)e.preventDefault();
+  if(e.code==='KeyM'||e.code==='Escape'){if(state==='playing'||state==='infinite')openMain();}
 });
-window.addEventListener('keyup', function(e) { keys[e.code] = false; });
+window.addEventListener('keyup',function(e){keys[e.code]=false;});
 
-document.getElementById('btnJogar').onclick = function() {
-  state = 'phases';
+document.getElementById('btnJogar').onclick=function(){
+  state='phases';
   document.getElementById('mainMenu').classList.remove('open');
   document.getElementById('phaseMenu').classList.add('open');
-  const g = document.getElementById('phaseGrid');
-  g.innerHTML = '';
-  for (let i = 1; i <= 10; i++) {
-    const b = document.createElement('button');
-    b.className = 'phaseBtn';
-    b.textContent = 'FASE ' + i;
-    b.onclick = (function(n){ return function(){ startPhase(n); }; })(i);
+  const g=document.getElementById('phaseGrid'); g.innerHTML='';
+  for(let i=1;i<=10;i++){
+    const b=document.createElement('button');
+    b.className='phaseBtn';
+    b.innerHTML='FASE '+i+'<small>'+PHASE_NAMES[i]+'</small>';
+    b.onclick=(function(n){return function(){startPhase(n);};})(i);
     g.appendChild(b);
   }
 };
-document.getElementById('btnInfinita').onclick = startInfinite;
-document.getElementById('btnColecao').onclick = function() {
-  state = 'collection';
+document.getElementById('btnInfinita').onclick=startInfinite;
+document.getElementById('btnColecao').onclick=function(){
+  state='collection';
   document.getElementById('mainMenu').classList.remove('open');
   document.getElementById('colMenu').classList.add('open');
   rebuildCol();
 };
-document.getElementById('btnVoltarFases').onclick = openMain;
-document.getElementById('btnVoltarCol').onclick = openMain;
-document.getElementById('btnCloseDetail').onclick = function() {
-  document.getElementById('detail').classList.remove('open');
-};
-document.getElementById('btnNext').onclick = function() {
-  if (currentPhase < 10) startPhase(currentPhase + 1);
-  else openMain();
-};
-document.getElementById('btnRetry').onclick = function() {
-  document.getElementById('finishPanel').classList.remove('open');
-  startPhase(currentPhase);
-};
-document.getElementById('btnMenuFinish').onclick = function() {
-  document.getElementById('finishPanel').classList.remove('open');
-  openMain();
-};
+document.getElementById('btnVoltarFases').onclick=openMain;
+document.getElementById('btnVoltarCol').onclick=openMain;
+document.getElementById('btnCloseDetail').onclick=function(){document.getElementById('detail').classList.remove('open');};
+document.getElementById('btnNext').onclick=function(){if(currentPhase<10)startPhase(currentPhase+1);else openMain();};
+document.getElementById('btnRetry').onclick=function(){document.getElementById('finishPanel').classList.remove('open');startPhase(currentPhase);};
+document.getElementById('btnMenuFinish').onclick=function(){document.getElementById('finishPanel').classList.remove('open');openMain();};
 
-function openMain() {
-  state = 'menu';
+function openMain(){
+  state='menu';
   document.getElementById('mainMenu').classList.add('open');
   document.getElementById('phaseMenu').classList.remove('open');
   document.getElementById('colMenu').classList.remove('open');
   document.getElementById('finishPanel').classList.remove('open');
-  document.getElementById('hud').style.display = 'none';
-  document.getElementById('hint').style.display = 'none';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('hint').style.display='none';
   document.getElementById('detail').classList.remove('open');
 }
-
-function startPhase(id) {
-  currentPhase = id;
-  const data = makePhase(id);
-  level = data.level;
-  cats = data.cats;
-  player.x = 120;
-  player.y = 360;
-  player.vx = 0;
-  player.vy = 0;
-  player.angle = 0;
-  player.boostTimer = 0;
-  player.airSustain = 0;
-  player.grounded = false;
-  player.onRamp = false;
-  camX = 0;
-  camY = 0;
-  phaseCatsGot = new Set();
-  startTime = performance.now();
-  state = 'playing';
+function startPhase(id){
+  currentPhase=id;
+  const data=makePhase(id);
+  level=data.level; cats=data.cats;
+  player.x=120;player.y=360;player.vx=0;player.vy=0;player.angle=0;
+  player.boostTimer=0;player.airSustain=0;player.grounded=false;player.onRamp=false;
+  camX=0;camY=0;phaseCatsGot=new Set();startTime=performance.now();
+  state='playing';
   document.getElementById('phaseMenu').classList.remove('open');
   document.getElementById('mainMenu').classList.remove('open');
   document.getElementById('finishPanel').classList.remove('open');
-  document.getElementById('hud').style.display = 'block';
-  document.getElementById('hint').style.display = 'block';
-  document.getElementById('hudPhase').textContent = 'FASE ' + id;
-  document.getElementById('catsTotal').textContent = cats.length;
-  document.getElementById('cats').textContent = '0';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('hint').style.display='block';
+  document.getElementById('hudPhase').textContent='FASE '+id+' · '+PHASE_NAMES[id];
+  document.getElementById('catsTotal').textContent=cats.length;
+  document.getElementById('cats').textContent='0';
 }
-
-function startInfinite() {
-  state = 'infinite';
-  resetInfinite();
-  startTime = performance.now();
+function startInfinite(){
+  state='infinite'; resetInfinite(); startTime=performance.now();
   document.getElementById('mainMenu').classList.remove('open');
-  document.getElementById('hud').style.display = 'block';
-  document.getElementById('hint').style.display = 'block';
-  document.getElementById('hudPhase').textContent = 'INFINITO';
-  document.getElementById('catsTotal').textContent = '∞';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('hint').style.display='block';
+  document.getElementById('hudPhase').textContent='INFINITO';
+  document.getElementById('catsTotal').textContent='∞';
 }
-
-function rebuildCol() {
-  const grid = document.getElementById('collectionGrid');
-  grid.innerHTML = '';
-  CAT_DATA.forEach(function(d, i) {
-    const got = collected.has(i);
-    const card = document.createElement('div');
-    card.className = 'catCard' + (got ? ' got' : '');
-    const cnv = document.createElement('canvas');
-    cnv.width = 36; cnv.height = 36;
-    const c = cnv.getContext('2d');
-    c.imageSmoothingEnabled = false;
-    if (got) drawCat(c, d, 36);
-    else {
-      c.fillStyle = '#333';
-      c.fillRect(4, 4, 28, 28);
-      c.fillStyle = '#555';
-      c.font = '14px monospace';
-      c.fillText('?', 14, 24);
-    }
+function rebuildCol(){
+  const grid=document.getElementById('collectionGrid'); grid.innerHTML='';
+  CAT_DATA.forEach(function(d,i){
+    const got=collected.has(i);
+    const card=document.createElement('div');
+    card.className='catCard'+(got?' got':'');
+    const cnv=document.createElement('canvas'); cnv.width=36; cnv.height=36;
+    const c=cnv.getContext('2d'); c.imageSmoothingEnabled=false;
+    if(got) drawCat(c,d,36);
+    else{c.fillStyle='#333';c.fillRect(4,4,28,28);c.fillStyle='#555';c.font='14px monospace';c.fillText('?',14,24);}
     card.appendChild(cnv);
-    const nm = document.createElement('div');
-    nm.className = 'nm';
-    nm.textContent = got ? d.name : '???';
+    const nm=document.createElement('div'); nm.className='nm'; nm.textContent=got?d.name:'???';
     card.appendChild(nm);
-    if (got) {
-      card.onclick = (function(id){ return function(){ showDetail(id); }; })(i);
-    }
+    if(got) card.onclick=(function(id){return function(){showDetail(id);};})(i);
     grid.appendChild(card);
   });
-  document.getElementById('colCount').textContent = collected.size + ' / ' + CAT_DATA.length;
+  document.getElementById('colCount').textContent=collected.size+' / '+CAT_DATA.length;
 }
-
-function showDetail(id) {
-  const d = CAT_DATA[id];
-  document.getElementById('dName').textContent = d.name;
-  document.getElementById('dDesc').textContent = d.desc;
-  const c = document.getElementById('dSwatch').getContext('2d');
-  c.imageSmoothingEnabled = false;
-  c.clearRect(0, 0, 64, 64);
-  drawCat(c, d, 64);
+function showDetail(id){
+  const d=CAT_DATA[id];
+  document.getElementById('dName').textContent=d.name;
+  document.getElementById('dDesc').textContent=d.desc;
+  const c=document.getElementById('dSwatch').getContext('2d');
+  c.imageSmoothingEnabled=false; c.clearRect(0,0,64,64); drawCat(c,d,64);
   document.getElementById('detail').classList.add('open');
 }
-
-function drawCat(c, d, sz, ox, oy) {
-  ox = ox || 0; oy = oy || 0;
-  const s = sz / 16;
-  c.fillStyle = d.colors[0];
-  c.fillRect(ox + 3*s, oy + 7*s, 10*s, 7*s);
-  c.fillRect(ox + 4*s, oy + 2*s, 8*s, 6*s);
-  c.fillRect(ox + 3*s, oy, 3*s, 4*s);
-  c.fillRect(ox + 10*s, oy, 3*s, 4*s);
-  if (d.mix && d.colors[1]) {
-    c.fillStyle = d.colors[1];
-    c.fillRect(ox + 8*s, oy + 3*s, 4*s, 5*s);
-    c.fillRect(ox + 5*s, oy + 9*s, 5*s, 4*s);
-  }
-  if (d.colors[2]) {
-    c.fillStyle = d.colors[2];
-    c.fillRect(ox + 4*s, oy + 4*s, 3*s, 3*s);
-  }
-  c.fillStyle = '#222';
-  c.fillRect(ox + 5*s, oy + 4*s, 2*s, 2*s);
-  c.fillRect(ox + 9*s, oy + 4*s, 2*s, 2*s);
-  c.fillStyle = '#ff9ff3';
-  c.fillRect(ox + 7*s, oy + 6*s, 2*s, 1*s);
+function drawCat(c,d,sz,ox,oy){
+  ox=ox||0; oy=oy||0; const s=sz/16;
+  c.fillStyle=d.colors[0];
+  c.fillRect(ox+3*s,oy+7*s,10*s,7*s); c.fillRect(ox+4*s,oy+2*s,8*s,6*s);
+  c.fillRect(ox+3*s,oy,3*s,4*s); c.fillRect(ox+10*s,oy,3*s,4*s);
+  if(d.mix&&d.colors[1]){c.fillStyle=d.colors[1];c.fillRect(ox+8*s,oy+3*s,4*s,5*s);c.fillRect(ox+5*s,oy+9*s,5*s,4*s);}
+  if(d.colors[2]){c.fillStyle=d.colors[2];c.fillRect(ox+4*s,oy+4*s,3*s,3*s);}
+  c.fillStyle='#222'; c.fillRect(ox+5*s,oy+4*s,2*s,2*s); c.fillRect(ox+9*s,oy+4*s,2*s,2*s);
+  c.fillStyle='#ff9ff3'; c.fillRect(ox+7*s,oy+6*s,2*s,1*s);
 }
 
-/* ===================== UPDATE ===================== */
-function update() {
-  if (state !== 'playing' && state !== 'infinite') return;
+/* ========== UPDATE ========== */
+function update(){
+  if(state!=='playing'&&state!=='infinite')return;
 
-  // movimento
-  if (keys['KeyD'] || keys['ArrowRight']) player.vx += ACC;
-  if (keys['KeyA'] || keys['ArrowLeft'])  player.vx -= ACC * 0.7;
-  player.vx = Math.max(-MAXV * 0.5, Math.min(MAXV, player.vx));
+  if(keys['KeyD']||keys['ArrowRight'])player.vx+=ACC;
+  if(keys['KeyA']||keys['ArrowLeft'])player.vx-=ACC*0.7;
+  player.vx=Math.max(-MAXV*0.5,Math.min(MAXV,player.vx));
+  if(player.grounded)player.vx*=FRIC; else player.vx*=0.997;
 
-  if (player.grounded) player.vx *= FRIC;
-  else player.vx *= 0.997;
-
-  // empinar
-  if (keys['KeyW'] || keys['ArrowUp']) {
-    if (player.grounded || player.onRamp) {
-      player.angle -= WH_T;
-      player.wheelie = true;
-    }
-  } else {
-    player.wheelie = false;
-    if (player.grounded || player.onRamp) player.angle *= 0.88;
-    else player.angle *= 0.97;
+  if(keys['KeyW']||keys['ArrowUp']){
+    if(player.grounded||player.onRamp){player.angle-=WH_T;player.wheelie=true;}
+  }else{
+    player.wheelie=false;
+    if(player.grounded||player.onRamp)player.angle*=0.88;
+    else player.angle*=0.97;
   }
-  player.angle = Math.max(-MAX_WH, Math.min(0.1, player.angle));
+  player.angle=Math.max(-MAX_WH,Math.min(0.1,player.angle));
 
-  if (player.boostTimer > 0) {
-    player.boostTimer--;
-    player.vx = Math.min(player.vx + 0.4, MAXV + 4);
-  }
+  if(player.boostTimer>0){player.boostTimer--;player.vx=Math.min(player.vx+0.4,MAXV+4);}
 
-  // gravidade + sustentação após rampa
-  let g = G;
-  if (player.airSustain > 0) {
-    player.airSustain--;
-    g = SUSTAIN_G;
-  }
-  player.vy += g;
-  if (player.vy > 14) player.vy = 14;
+  let g=G;
+  if(player.airSustain>0){player.airSustain--;g=SUSTAIN_G;}
+  player.vy+=g; if(player.vy>14)player.vy=14;
+  player.x+=player.vx; player.y+=player.vy;
 
-  player.x += player.vx;
-  player.y += player.vy;
+  const prevOnRamp=player.onRamp;
+  player.grounded=false; player.onRamp=false;
+  const fx=player.x+player.w*0.4, fy=player.y+player.h;
+  let bestY=null, bestSeg=null;
 
-  // --- COLISÃO ---
-  const prevOnRamp = player.onRamp;
-  player.grounded = false;
-  player.onRamp = false;
-
-  const feetX = player.x + player.w * 0.4;
-  const feetY = player.y + player.h;
-
-  let bestY = null;
-  let bestSeg = null;
-
-  for (let i = 0; i < level.length; i++) {
-    const seg = level[i];
-
-    // obstáculos
-    if (seg.type === 'obstacle') {
-      const wheelieOk = player.angle < -0.38;
-      if (!wheelieOk &&
-          feetX > seg.x - 5 && feetX < seg.x + seg.w + 5 &&
-          feetY > seg.y - 5 && player.y + player.h * 0.3 < seg.y + seg.h + 8) {
-        // bateu
-        player.vx = -2.2;
-        player.x = seg.x - player.w * 0.42;
-        player.vy = 0;
-        if (seg.groundY !== undefined) {
-          player.y = seg.groundY - player.h;
-          player.grounded = true;
-        }
-        impactFx = 12;
+  for(let i=0;i<level.length;i++){
+    const seg=level[i];
+    if(seg.type==='obstacle'){
+      const ok=player.angle<-0.38;
+      if(!ok&&fx>seg.x-5&&fx<seg.x+seg.w+5&&fy>seg.y-5&&player.y+player.h*0.3<seg.y+seg.h+8){
+        player.vx=-2.2; player.x=seg.x-player.w*0.42; player.vy=0;
+        if(seg.groundY!==undefined){player.y=seg.groundY-player.h;player.grounded=true;}
+        impactFx=12;
       }
       continue;
     }
-
-    if (seg.type === 'finish' && state === 'playing') {
-      if (player.x + player.w * 0.5 > seg.x) {
-        endPhase();
-        return;
-      }
+    if(seg.type==='finish'&&state==='playing'){
+      if(player.x+player.w*0.5>seg.x){endPhase();return;}
       continue;
     }
-
-    if (seg.type === 'ceilingRamp' || seg.type === 'tunnelVis') continue;
-
-    if (feetX < seg.x - 6 || feetX > seg.x + (seg.w || 0) + 6) continue;
-
-    const sy = getFloorY(seg, feetX);
-    if (sy === null) continue;
-
-    if (feetY >= sy - 12 && player.y + player.h * 0.25 < sy + 40) {
-      if (bestY === null || sy < bestY) {
-        bestY = sy;
-        bestSeg = seg;
-      }
+    if(seg.type==='ceilingRamp'||seg.type==='tunnelVis')continue;
+    if(fx<seg.x-6||fx>seg.x+(seg.w||0)+6)continue;
+    const sy=getFloorY(seg,fx);
+    if(sy===null)continue;
+    if(fy>=sy-12&&player.y+player.h*0.25<sy+40){
+      if(bestY===null||sy<bestY){bestY=sy;bestSeg=seg;}
     }
   }
 
-  if (bestSeg && bestY !== null) {
-    if (player.vy >= -2 || feetY >= bestY - 5) {
-      player.y = bestY - player.h;
-      player.vy = 0;
-      player.grounded = true;
-      player.airSustain = 0;
-
-      if (bestSeg.type === 'boost') {
-        if (player.boostTimer <= 0) {
-          player.boostTimer = 28;
-          player.vy = -6.2;
-          player.grounded = false;
-        }
-      } else if (bestSeg.type === 'rampUp' || bestSeg.type === 'rampDown') {
-        player.onRamp = true;
-        const ra = Math.atan(getSlope(bestSeg));
-        if (!player.wheelie) player.angle = player.angle * 0.5 + ra * 0.5;
-      } else if (!player.wheelie) {
-        player.angle *= 0.78;
-      }
+  if(bestSeg&&bestY!==null){
+    if(player.vy>=-2||fy>=bestY-5){
+      player.y=bestY-player.h; player.vy=0; player.grounded=true; player.airSustain=0;
+      if(bestSeg.type==='boost'){
+        if(player.boostTimer<=0){player.boostTimer=28;player.vy=-6.2;player.grounded=false;}
+      }else if(bestSeg.type==='rampUp'||bestSeg.type==='rampDown'){
+        player.onRamp=true;
+        const ra=Math.atan(getSlope(bestSeg));
+        if(!player.wheelie)player.angle=player.angle*0.5+ra*0.5;
+      }else if(!player.wheelie)player.angle*=0.78;
     }
   }
 
-  // saiu da rampa → sustentação
-  if (prevOnRamp && !player.onRamp && !player.grounded) {
-    player.airSustain = SUSTAIN_FRAMES;
-    if (player.vx > 2.5) player.vx = Math.min(player.vx * 1.06, MAXV + 1.2);
-    if (player.vy > -1) player.vy -= 2.0;
+  if(prevOnRamp&&!player.onRamp&&!player.grounded){
+    player.airSustain=SUSTAIN_FRAMES;
+    if(player.vx>2.5)player.vx=Math.min(player.vx*1.06,MAXV+1.2);
+    if(player.vy>-1)player.vy-=2.1;
   }
 
-  // teto
-  const headY = player.y + 6;
-  for (let i = 0; i < level.length; i++) {
-    const seg = level[i];
-    if (seg.type !== 'ceilingRamp') continue;
-    if (feetX < seg.x - 4 || feetX > seg.x + seg.w + 4) continue;
-    const cy = getCeilY(seg, feetX);
-    if (cy !== null && headY < cy && player.y + player.h > cy - 70) {
-      if (player.y < cy - 3) {
-        player.y = cy - 3;
-        if (player.vy < 0) player.vy = 0;
-        if (player.angle < -0.5) player.angle = -0.5;
-      }
+  const headY=player.y+6;
+  for(let i=0;i<level.length;i++){
+    const seg=level[i];
+    if(seg.type!=='ceilingRamp')continue;
+    if(fx<seg.x-4||fx>seg.x+seg.w+4)continue;
+    const cy=getCeilY(seg,fx);
+    if(cy!==null&&headY<cy&&player.y+player.h>cy-70){
+      if(player.y<cy-3){player.y=cy-3;if(player.vy<0)player.vy=0;if(player.angle<-0.5)player.angle=-0.5;}
     }
   }
 
-  // gatos
-  for (let i = 0; i < cats.length; i++) {
-    const cat = cats[i];
-    if (cat.collected) continue;
-    const cx = cat.x + 16;
-    const cy = cat.y + 16 + Math.sin(Date.now() / 200 + cat.bob) * 4;
-    if (Math.abs(player.x + 40 - cx) < 36 && Math.abs(player.y + 25 - cy) < 36) {
-      cat.collected = true;
-      collected.add(cat.typeId);
-      phaseCatsGot.add(cat.typeId);
-      localStorage.setItem('motoCats', JSON.stringify(Array.from(collected)));
-      document.getElementById('cats').textContent = phaseCatsGot.size;
+  for(let i=0;i<cats.length;i++){
+    const cat=cats[i]; if(cat.collected)continue;
+    const cx=cat.x+16, cy=cat.y+16+Math.sin(Date.now()/200+cat.bob)*4;
+    if(Math.abs(player.x+40-cx)<36&&Math.abs(player.y+25-cy)<36){
+      cat.collected=true; collected.add(cat.typeId); phaseCatsGot.add(cat.typeId);
+      localStorage.setItem('motoCats',JSON.stringify(Array.from(collected)));
+      document.getElementById('cats').textContent=phaseCatsGot.size;
     }
   }
 
-  // queda
-  if (player.y > H + 200) {
-    if (state === 'infinite') {
-      player.x = Math.max(120, player.x - 300);
-      player.y = 360;
-      player.vx = 0; player.vy = 0; player.angle = 0;
-      player.boostTimer = 0; player.airSustain = 0;
-    } else {
-      player.x = 120; player.y = 360;
-      player.vx = 0; player.vy = 0; player.angle = 0;
-      player.boostTimer = 0; player.airSustain = 0;
-      camX = 0; camY = 0;
-    }
+  if(player.y>H+200){
+    if(state==='infinite'){player.x=Math.max(120,player.x-300);player.y=360;player.vx=0;player.vy=0;player.angle=0;player.boostTimer=0;player.airSustain=0;}
+    else{player.x=120;player.y=360;player.vx=0;player.vy=0;player.angle=0;player.boostTimer=0;player.airSustain=0;camX=0;camY=0;}
   }
+  if(impactFx>0)impactFx--;
 
-  if (impactFx > 0) impactFx--;
+  camX+=(player.x-W*0.28-camX)*0.12; if(camX<0)camX=0;
+  camY+=(player.y-H*0.55-camY)*0.08; if(camY>0)camY=0; if(camY<-130)camY=-130;
+  if(state==='infinite')generateInfinite();
 
-  // câmera
-  const targetCamX = player.x - W * 0.28;
-  camX += (targetCamX - camX) * 0.12;
-  if (camX < 0) camX = 0;
-  const targetCamY = player.y - H * 0.55;
-  camY += (targetCamY - camY) * 0.08;
-  if (camY > 0) camY = 0;
-  if (camY < -130) camY = -130;
-
-  if (state === 'infinite') generateInfinite();
-
-  document.getElementById('dist').textContent = Math.max(0, Math.floor((player.x - 120) / 10));
-  document.getElementById('timer').textContent = ((performance.now() - startTime) / 1000).toFixed(1);
-  if (state === 'infinite') document.getElementById('cats').textContent = collected.size;
+  document.getElementById('dist').textContent=Math.max(0,Math.floor((player.x-120)/10));
+  document.getElementById('timer').textContent=((performance.now()-startTime)/1000).toFixed(1);
+  if(state==='infinite')document.getElementById('cats').textContent=collected.size;
 }
 
-function endPhase() {
-  state = 'finish';
-  const t = ((performance.now() - startTime) / 1000).toFixed(1);
-  const key = 'p' + currentPhase;
-  let best = bestTimes[key];
-  if (!best || parseFloat(t) < parseFloat(best)) {
-    best = t;
-    bestTimes[key] = t;
-    localStorage.setItem('motoBest', JSON.stringify(bestTimes));
-  }
-  document.getElementById('fCats').textContent = phaseCatsGot.size + ' / ' + cats.length;
-  document.getElementById('fTime').textContent = t;
-  document.getElementById('fBest').textContent = best + 's';
+function endPhase(){
+  state='finish';
+  const t=((performance.now()-startTime)/1000).toFixed(1);
+  const key='p'+currentPhase;
+  let best=bestTimes[key];
+  if(!best||parseFloat(t)<parseFloat(best)){best=t;bestTimes[key]=t;localStorage.setItem('motoBest',JSON.stringify(bestTimes));}
+  document.getElementById('fCats').textContent=phaseCatsGot.size+' / '+cats.length;
+  document.getElementById('fTime').textContent=t;
+  document.getElementById('fBest').textContent=best+'s';
   document.getElementById('finishPanel').classList.add('open');
-  document.getElementById('btnNext').style.display = currentPhase < 10 ? 'inline-block' : 'none';
+  document.getElementById('btnNext').style.display=currentPhase<10?'inline-block':'none';
 }
 
-/* ===================== DRAW ===================== */
-function drawBg() {
-  const night = currentPhase === 9 || (state === 'infinite' && Math.floor(camX / 2500) % 3 === 2);
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  if (night) {
-    g.addColorStop(0, '#080814');
-    g.addColorStop(1, '#101028');
-  } else {
-    g.addColorStop(0, '#0f0c29');
-    g.addColorStop(0.5, '#302b63');
-    g.addColorStop(1, '#24243e');
+/* ========== DRAW ========== */
+function drawBg(){
+  const night=currentPhase===9||(state==='infinite'&&Math.floor(camX/2500)%3===2);
+  const g=ctx.createLinearGradient(0,0,0,H);
+  if(night){g.addColorStop(0,'#080814');g.addColorStop(1,'#101028');}
+  else if(currentPhase===7){g.addColorStop(0,'#1a2f1a');g.addColorStop(1,'#0d1f0d');}
+  else if(currentPhase===8){g.addColorStop(0,'#1a1a22');g.addColorStop(1,'#2a2a32');}
+  else{g.addColorStop(0,'#0f0c29');g.addColorStop(0.5,'#302b63');g.addColorStop(1,'#24243e');}
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#fff';
+  for(let i=0;i<28;i++){
+    const sx=((i*157+camX*0.05)%(W+20))-10;
+    const sy=(i*89)%(H*0.38)+camY*0.2;
+    ctx.globalAlpha=0.18+(i%3)*0.15; ctx.fillRect(sx,sy,2,2);
   }
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#fff';
-  for (let i = 0; i < 30; i++) {
-    const sx = ((i * 157 + camX * 0.05) % (W + 20)) - 10;
-    const sy = (i * 89) % (H * 0.4) + camY * 0.2;
-    ctx.globalAlpha = 0.2 + (i % 3) * 0.15;
-    ctx.fillRect(sx, sy, 2, 2);
-  }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha=1;
 }
-
-function drawSeg(seg) {
-  const sx = seg.x - camX;
-  const sy = seg.y - camY;
-  if (sx + (seg.w || 0) < -50 || sx > W + 50) return;
-
-  if (seg.type === 'ground') {
-    ctx.fillStyle = '#2d3436';
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#00b894';
-    ctx.fillRect(sx, sy - 4, seg.w, 5);
-    ctx.fillStyle = '#636e72';
-    ctx.fillRect(sx, sy, seg.w, 3);
-  } else if (seg.type === 'platform') {
-    ctx.fillStyle = '#6c5ce7';
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#a29bfe';
-    ctx.fillRect(sx, sy, seg.w, 4);
-  } else if (seg.type === 'rampUp') {
+function drawSeg(seg){
+  const sx=seg.x-camX, sy=seg.y-camY;
+  if(sx+(seg.w||0)<-50||sx>W+50)return;
+  if(seg.type==='ground'){
+    ctx.fillStyle='#2d3436';ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle=currentPhase===7?'#2d6a4f':'#00b894';ctx.fillRect(sx,sy-4,seg.w,5);
+    ctx.fillStyle='#636e72';ctx.fillRect(sx,sy,seg.w,3);
+  }else if(seg.type==='platform'){
+    ctx.fillStyle=currentPhase===8?'#4a5568':'#6c5ce7';ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle=currentPhase===8?'#718096':'#a29bfe';ctx.fillRect(sx,sy,seg.w,4);
+  }else if(seg.type==='rampUp'){
+    ctx.beginPath();ctx.moveTo(sx,sy+3);ctx.lineTo(sx+seg.w,sy-seg.h+3);ctx.lineTo(sx+seg.w,sy+90);ctx.lineTo(sx,sy+90);ctx.closePath();
+    ctx.fillStyle='#2d3436';ctx.fill();
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+seg.w,sy-seg.h);ctx.lineTo(sx+seg.w,sy-seg.h+5);ctx.lineTo(sx,sy+5);ctx.closePath();
+    ctx.fillStyle='#00b894';ctx.fill();
+  }else if(seg.type==='rampDown'){
+    ctx.beginPath();ctx.moveTo(sx,sy+3);ctx.lineTo(sx+seg.w,sy+seg.h+3);ctx.lineTo(sx+seg.w,sy+seg.h+90);ctx.lineTo(sx,sy+90);ctx.closePath();
+    ctx.fillStyle='#2d3436';ctx.fill();
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+seg.w,sy+seg.h);ctx.lineTo(sx+seg.w,sy+seg.h+5);ctx.lineTo(sx,sy+5);ctx.closePath();
+    ctx.fillStyle='#00b894';ctx.fill();
+  }else if(seg.type==='boost'){
+    const p=0.5+Math.sin(Date.now()/100)*0.5;
+    ctx.fillStyle='rgba(255,190,0,'+p+')';ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle='#ff9f1a';ctx.fillRect(sx+2,sy+2,seg.w-4,seg.h-4);
+    ctx.fillStyle='#fff';ctx.font='bold 10px Courier New';ctx.fillText('BOOST',sx+6,sy+12);
+  }else if(seg.type==='obstacle'){
+    ctx.fillStyle=currentPhase===7?'#5d4037':(currentPhase===8?'#455a64':'#8B4513');
+    ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle=currentPhase===7?'#6d4c41':(currentPhase===8?'#607d8b':'#A0522D');
+    ctx.fillRect(sx+2,sy+2,seg.w-4,Math.max(2,seg.h-4));
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(sx-1,sy+seg.h,seg.w+2,3);
+  }else if(seg.type==='ceilingRamp'){
+    ctx.fillStyle='#1a1a1a';
     ctx.beginPath();
-    ctx.moveTo(sx, sy + 3);
-    ctx.lineTo(sx + seg.w, sy - seg.h + 3);
-    ctx.lineTo(sx + seg.w, sy + 90);
-    ctx.lineTo(sx, sy + 90);
-    ctx.closePath();
-    ctx.fillStyle = '#2d3436';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(sx + seg.w, sy - seg.h);
-    ctx.lineTo(sx + seg.w, sy - seg.h + 5);
-    ctx.lineTo(sx, sy + 5);
-    ctx.closePath();
-    ctx.fillStyle = '#00b894';
-    ctx.fill();
-  } else if (seg.type === 'rampDown') {
-    ctx.beginPath();
-    ctx.moveTo(sx, sy + 3);
-    ctx.lineTo(sx + seg.w, sy + seg.h + 3);
-    ctx.lineTo(sx + seg.w, sy + seg.h + 90);
-    ctx.lineTo(sx, sy + 90);
-    ctx.closePath();
-    ctx.fillStyle = '#2d3436';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(sx + seg.w, sy + seg.h);
-    ctx.lineTo(sx + seg.w, sy + seg.h + 5);
-    ctx.lineTo(sx, sy + 5);
-    ctx.closePath();
-    ctx.fillStyle = '#00b894';
-    ctx.fill();
-  } else if (seg.type === 'boost') {
-    const p = 0.5 + Math.sin(Date.now() / 100) * 0.5;
-    ctx.fillStyle = 'rgba(255,190,0,' + p + ')';
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#ff9f1a';
-    ctx.fillRect(sx + 2, sy + 2, seg.w - 4, seg.h - 4);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 10px Courier New';
-    ctx.fillText('BOOST', sx + 6, sy + 12);
-  } else if (seg.type === 'obstacle') {
-    ctx.fillStyle = '#8B4513';
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#A0522D';
-    ctx.fillRect(sx + 2, sy + 2, seg.w - 4, Math.max(2, seg.h - 4));
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fillRect(sx - 1, sy + seg.h, seg.w + 2, 3);
-  } else if (seg.type === 'ceilingRamp') {
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath();
-    if (seg.dir === 'down') {
-      ctx.moveTo(sx, sy - 70);
-      ctx.lineTo(sx + seg.w, sy + seg.h - 70);
-      ctx.lineTo(sx + seg.w, sy + seg.h + 26);
-      ctx.lineTo(sx, sy + 26);
-    } else {
-      ctx.moveTo(sx, sy - 70);
-      ctx.lineTo(sx + seg.w, sy - seg.h - 70);
-      ctx.lineTo(sx + seg.w, sy - seg.h + 26);
-      ctx.lineTo(sx, sy + 26);
-    }
-    ctx.closePath();
-    ctx.fill();
-  } else if (seg.type === 'tunnelVis') {
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(sx, sy, seg.w, seg.h);
-    ctx.fillStyle = '#f1c40f';
-    for (let i = 40; i < seg.w; i += 65) {
-      ctx.fillRect(sx + i, sy + 6, 6, 4);
-    }
-  } else if (seg.type === 'finish') {
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(sx, sy, 12, seg.h);
-    ctx.fillStyle = '#e74c3c';
-    for (let i = 0; i < seg.h; i += 14) {
-      ctx.fillRect(sx, sy + i, 12, 7);
-    }
-    ctx.fillStyle = '#00ff88';
-    ctx.font = 'bold 12px Courier New';
-    ctx.fillText('CHEGADA', sx - 10, sy - 6);
+    if(seg.dir==='down'){ctx.moveTo(sx,sy-70);ctx.lineTo(sx+seg.w,sy+seg.h-70);ctx.lineTo(sx+seg.w,sy+seg.h+26);ctx.lineTo(sx,sy+26);}
+    else{ctx.moveTo(sx,sy-70);ctx.lineTo(sx+seg.w,sy-seg.h-70);ctx.lineTo(sx+seg.w,sy-seg.h+26);ctx.lineTo(sx,sy+26);}
+    ctx.closePath();ctx.fill();
+  }else if(seg.type==='tunnelVis'){
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(sx,sy,seg.w,seg.h);
+    ctx.fillStyle='#f1c40f';
+    for(let i=40;i<seg.w;i+=65)ctx.fillRect(sx+i,sy+6,6,4);
+  }else if(seg.type==='finish'){
+    ctx.fillStyle='#fff';ctx.fillRect(sx,sy,12,seg.h);
+    ctx.fillStyle='#e74c3c';
+    for(let i=0;i<seg.h;i+=14)ctx.fillRect(sx,sy+i,12,7);
+    ctx.fillStyle='#00ff88';ctx.font='bold 12px Courier New';ctx.fillText('CHEGADA',sx-10,sy-6);
   }
 }
-
-function drawCats() {
-  for (let i = 0; i < cats.length; i++) {
-    const cat = cats[i];
-    if (cat.collected) continue;
-    const sx = cat.x - camX;
-    const sy = cat.y - camY + Math.sin(Date.now() / 220 + cat.bob) * 4;
-    if (sx < -40 || sx > W + 40) continue;
-    drawCat(ctx, CAT_DATA[cat.typeId], 32, sx, sy);
+function drawCats(){
+  for(let i=0;i<cats.length;i++){
+    const cat=cats[i]; if(cat.collected)continue;
+    const sx=cat.x-camX, sy=cat.y-camY+Math.sin(Date.now()/220+cat.bob)*4;
+    if(sx<-40||sx>W+40)continue;
+    drawCat(ctx,CAT_DATA[cat.typeId],32,sx,sy);
   }
 }
-
-function drawPlayer() {
-  const px = player.x - camX;
-  const py = player.y - camY;
-  ctx.save();
-  ctx.translate(px + player.w * 0.38, py + player.h * 0.7);
-  ctx.rotate(player.angle);
-
-  if (imgPlayer.complete && imgPlayer.naturalWidth > 0) {
-    ctx.drawImage(imgPlayer, -player.w * 0.38, -player.h * 0.7, player.w, player.h);
-  } else {
-    // fallback pixel moto
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-24, -6, 18, 18);
-    ctx.fillStyle = '#555';
-    ctx.fillRect(-20, -2, 10, 10);
-    ctx.fillStyle = '#111';
-    ctx.fillRect(18, -6, 16, 16);
-    ctx.fillStyle = '#555';
-    ctx.fillRect(21, -2, 10, 10);
-    ctx.fillStyle = '#c0392b';
-    ctx.fillRect(-12, -15, 40, 13);
-    ctx.fillStyle = '#e74c3c';
-    ctx.fillRect(-2, -24, 24, 11);
-    ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(18, -32, 5, 16);
-    ctx.fillRect(14, -34, 12, 5);
-    ctx.fillStyle = '#3498db';
-    ctx.fillRect(0, -38, 13, 15);
-    ctx.fillStyle = '#f1c40f';
-    ctx.fillRect(1, -48, 11, 11);
-    ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(3, -44, 6, 4);
-    ctx.fillStyle = '#3498db';
-    ctx.fillRect(10, -32, 11, 5);
+function drawPlayer(){
+  const px=player.x-camX, py=player.y-camY;
+  ctx.save(); ctx.translate(px+player.w*0.38,py+player.h*0.7); ctx.rotate(player.angle);
+  if(imgPlayer.complete&&imgPlayer.naturalWidth>0){
+    ctx.drawImage(imgPlayer,-player.w*0.38,-player.h*0.7,player.w,player.h);
+  }else{
+    ctx.fillStyle='#111';ctx.fillRect(-24,-6,18,18);ctx.fillStyle='#555';ctx.fillRect(-20,-2,10,10);
+    ctx.fillStyle='#111';ctx.fillRect(18,-6,16,16);ctx.fillStyle='#555';ctx.fillRect(21,-2,10,10);
+    ctx.fillStyle='#c0392b';ctx.fillRect(-12,-15,40,13);ctx.fillStyle='#e74c3c';ctx.fillRect(-2,-24,24,11);
+    ctx.fillStyle='#2c3e50';ctx.fillRect(18,-32,5,16);ctx.fillRect(14,-34,12,5);
+    ctx.fillStyle='#3498db';ctx.fillRect(0,-38,13,15);ctx.fillStyle='#f1c40f';ctx.fillRect(1,-48,11,11);
+    ctx.fillStyle='#2c3e50';ctx.fillRect(3,-44,6,4);ctx.fillStyle='#3498db';ctx.fillRect(10,-32,11,5);
   }
   ctx.restore();
-
-  if (player.boostTimer > 0) {
-    ctx.fillStyle = 'rgba(255,180,0,0.9)';
-    ctx.font = 'bold 12px Courier New';
-    ctx.fillText('BOOST!', px, py - 12);
-  }
-  if (player.wheelie) {
-    ctx.fillStyle = '#00ff88';
-    ctx.font = '11px Courier New';
-    ctx.fillText('WHEELIE', px - 4, py - 26);
-  }
-  if (impactFx > 0) {
-    ctx.fillStyle = 'rgba(255,60,30,' + (impactFx / 12) + ')';
-    ctx.font = 'bold 16px Courier New';
-    ctx.fillText('!', px + 30, py - 6);
-  }
+  if(player.boostTimer>0){ctx.fillStyle='rgba(255,180,0,0.9)';ctx.font='bold 12px Courier New';ctx.fillText('BOOST!',px,py-12);}
+  if(player.wheelie){ctx.fillStyle='#00ff88';ctx.font='11px Courier New';ctx.fillText('WHEELIE',px-4,py-26);}
+  if(impactFx>0){ctx.fillStyle='rgba(255,60,30,'+(impactFx/12)+')';ctx.font='bold 16px Courier New';ctx.fillText('!',px+30,py-6);}
 }
-
-function draw() {
+function draw(){
   drawBg();
-  if (state === 'playing' || state === 'infinite') {
-    for (let i = 0; i < level.length; i++) {
-      if (level[i].type === 'ceilingRamp') drawSeg(level[i]);
-    }
-    for (let i = 0; i < level.length; i++) {
-      if (level[i].type !== 'ceilingRamp' && level[i].type !== 'tunnelVis') drawSeg(level[i]);
-    }
-    for (let i = 0; i < level.length; i++) {
-      if (level[i].type === 'tunnelVis') drawSeg(level[i]);
-    }
-    drawCats();
-    drawPlayer();
+  if(state==='playing'||state==='infinite'){
+    for(let i=0;i<level.length;i++) if(level[i].type==='ceilingRamp') drawSeg(level[i]);
+    for(let i=0;i<level.length;i++) if(level[i].type!=='ceilingRamp'&&level[i].type!=='tunnelVis') drawSeg(level[i]);
+    for(let i=0;i<level.length;i++) if(level[i].type==='tunnelVis') drawSeg(level[i]);
+    drawCats(); drawPlayer();
   }
 }
-
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
+function loop(){update();draw();requestAnimationFrame(loop);}
 loop();
-
 })();
 </script>
 </body>
